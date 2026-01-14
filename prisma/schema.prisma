@@ -1,0 +1,115 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Order {
+  id                String      @id @default(cuid())
+  orderNumber       String      @unique
+  status            OrderStatus @default(RECEIVED)
+
+  // Client info
+  customerName      String
+  customerEmail     String
+  customerPhone     String
+  customerCity      String
+
+  // Order details
+  description       String?
+  sourceImageUrl    String
+  preferredSize     String?
+  preferredColor    String?
+  notes             String?
+
+  // Approval
+  selectedVariantId String?
+  approvedAt        DateTime?
+
+  // Shipping
+  shippingAddress   Json?
+  shippingMethod    String?
+  shippingCost      Decimal?    @db.Decimal(10, 2)
+  trackingNumber    String?
+
+  // Payment
+  price             Decimal?    @db.Decimal(10, 2)
+  paidAt            DateTime?
+  stripeSessionId   String?
+  stripePaymentId   String?
+
+  // Timestamps
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  shippedAt         DateTime?
+  deliveredAt       DateTime?
+
+  // Relations
+  variants          ModelVariant[]
+  review            Review?
+
+  @@index([status])
+  @@index([customerEmail])
+  @@index([createdAt])
+}
+
+enum OrderStatus {
+  RECEIVED
+  MODELING
+  PENDING_APPROVAL
+  APPROVED
+  PAID
+  PRINTING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+model ModelVariant {
+  id              String   @id @default(cuid())
+  orderId         String
+  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  previewImageUrl String
+  description     String?
+  createdAt       DateTime @default(now())
+
+  @@index([orderId])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  orderId   String   @unique
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  rating    Int
+  comment   String?
+  photoUrls Json?
+  isPublic  Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Example {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  imageUrls   Json
+  category    String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([isActive, sortOrder])
+}
+
+model AdminUser {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+}
