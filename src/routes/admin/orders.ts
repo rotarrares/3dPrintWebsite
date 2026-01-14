@@ -457,6 +457,14 @@ const sendApprovalEmailRoute = createRoute({
         },
       },
     },
+    500: {
+      description: 'Eroare la trimiterea emailului',
+      content: {
+        'application/json': {
+          schema: ErrorSchema,
+        },
+      },
+    },
   },
 });
 
@@ -521,6 +529,14 @@ const sendShippingEmailRoute = createRoute({
     },
     404: {
       description: 'Comanda nu există',
+      content: {
+        'application/json': {
+          schema: ErrorSchema,
+        },
+      },
+    },
+    500: {
+      description: 'Eroare la trimiterea emailului',
       content: {
         'application/json': {
           schema: ErrorSchema,
@@ -592,6 +608,14 @@ const sendReviewEmailRoute = createRoute({
     },
     404: {
       description: 'Comanda nu există',
+      content: {
+        'application/json': {
+          schema: ErrorSchema,
+        },
+      },
+    },
+    500: {
+      description: 'Eroare la trimiterea emailului',
       content: {
         'application/json': {
           schema: ErrorSchema,
