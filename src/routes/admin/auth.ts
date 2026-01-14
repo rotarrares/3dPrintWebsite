@@ -133,6 +133,14 @@ const meRoute = createRoute({
         },
       },
     },
+    404: {
+      description: 'Administrator negăsit',
+      content: {
+        'application/json': {
+          schema: ErrorSchema,
+        },
+      },
+    },
   },
 });
 

@@ -437,7 +437,7 @@ app.openapi(createReviewRoute, async (c) => {
       orderId: id,
       rating: data.rating,
       comment: data.comment || null,
-      photoUrls: data.photoUrls || null,
+      photoUrls: data.photoUrls ?? undefined,
     },
   });
 

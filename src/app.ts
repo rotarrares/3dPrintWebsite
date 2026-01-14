@@ -34,6 +34,14 @@ app.get('/health', (c) => {
 // API routes
 app.route('/api', apiRoutes);
 
+// Register security scheme
+app.openAPIRegistry.registerComponent('securitySchemes', 'Bearer', {
+  type: 'http',
+  scheme: 'bearer',
+  bearerFormat: 'JWT',
+  description: 'Token JWT pentru autentificare admin',
+});
+
 // OpenAPI documentation
 app.doc('/openapi.json', {
   openapi: '3.1.0',
@@ -62,16 +70,6 @@ app.doc('/openapi.json', {
     { name: 'Admin Examples', description: 'Gestionare exemple (admin)' },
     { name: 'Admin Stats', description: 'Statistici dashboard' },
   ],
-  components: {
-    securitySchemes: {
-      Bearer: {
-        type: 'http',
-        scheme: 'bearer',
-        bearerFormat: 'JWT',
-        description: 'Token JWT pentru autentificare admin',
-      },
-    },
-  },
 });
 
 // Swagger UI

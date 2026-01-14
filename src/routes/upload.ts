@@ -52,6 +52,14 @@ const uploadRoute = createRoute({
         },
       },
     },
+    500: {
+      description: 'Eroare la încărcare',
+      content: {
+        'application/json': {
+          schema: ErrorSchema,
+        },
+      },
+    },
   },
 });
 
