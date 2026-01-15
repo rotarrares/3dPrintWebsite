@@ -12,7 +12,7 @@ const adminApp = createAdminApp();
 const honoHandler = handle(app);
 
 // Combined handler that routes to AdminJS or Hono
-function createHandler(method: string) {
+function createHandler(_method: string) {
   return async (req: VercelRequest, res: VercelResponse) => {
     const url = req.url || '/';
 

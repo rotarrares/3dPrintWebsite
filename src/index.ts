@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { getRequestListener } from '@hono/node-server';
 import app from './app.js';
-import { createAdminApp, adminJs } from './admin/index.js';
+import { createAdminApp, getAdminJs } from './admin/index.js';
 
 const port = Number(process.env.PORT) || 3001;
 
@@ -11,7 +11,7 @@ console.log(`Server:       http://localhost:${port}`);
 console.log(`API Docs:     http://localhost:${port}/docs`);
 console.log(`OpenAPI:      http://localhost:${port}/openapi.json`);
 console.log(`Health:       http://localhost:${port}/health`);
-console.log(`Admin Panel:  http://localhost:${port}${adminJs.options.rootPath}`);
+console.log(`Admin Panel:  http://localhost:${port}${getAdminJs().options.rootPath}`);
 console.log('====================');
 
 // Create Express app for AdminJS
