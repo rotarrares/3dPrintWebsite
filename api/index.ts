@@ -21,12 +21,23 @@ async function getAdminApp() {
 // Combined handler that routes to AdminJS or Hono
 function createHandler(_method: string) {
   return async (req: VercelRequest, res: VercelResponse) => {
-    const url = req.url || '/';
+    // Get the path - check multiple sources for Vercel compatibility
+    const url = req.url || (req.headers['x-vercel-proxy-path'] as string) || '/';
+    const path = url.split('?')[0];
+
+    // Debug logging
+    console.log('Request URL:', req.url, 'Path:', path);
 
     // Route /admin/* to Express AdminJS (lazy loaded)
-    if (url.startsWith('/admin')) {
-      const admin = await getAdminApp();
-      return admin(req, res);
+    if (path === '/admin' || path.startsWith('/admin/')) {
+      try {
+        const admin = await getAdminApp();
+        return admin(req, res);
+      } catch (error) {
+        console.error('AdminJS error:', error);
+        res.status(500).json({ error: 'Admin panel error', message: String(error) });
+        return;
+      }
     }
 
     // Route everything else to Hono
