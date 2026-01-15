@@ -12,12 +12,18 @@ app.use('*', logger());
 
 // CORS configuration
 app.use('*', cors({
-  origin: [
-    'https://print3d.ro',
-    'https://www.print3d.ro',
-    'http://localhost:3000',
-    'http://localhost:5173',
-  ],
+  origin: (origin) => {
+    // Allow any localhost origin (any port)
+    if (origin && (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:'))) {
+      return origin;
+    }
+    // Production domains
+    const allowedOrigins = [
+      'https://print3d.ro',
+      'https://www.print3d.ro',
+    ];
+    return allowedOrigins.includes(origin) ? origin : null;
+  },
   credentials: true,
   allowHeaders: ['Content-Type', 'Authorization'],
   allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -63,6 +69,7 @@ app.doc('/openapi.json', {
     { name: 'Orders', description: 'Gestionare comenzi client' },
     { name: 'Upload', description: 'Încărcare fișiere' },
     { name: 'Examples', description: 'Exemple de lucrări' },
+    { name: 'Products', description: 'Produse disponibile' },
     { name: 'Contact', description: 'Formular contact' },
     { name: 'Webhooks', description: 'Webhook-uri externe (Stripe)' },
     { name: 'Admin Auth', description: 'Autentificare administrator' },

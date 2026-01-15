@@ -1,7 +1,7 @@
 import { OpenAPIHono, createRoute } from '@hono/zod-openapi';
 import { db } from '../../lib/db.js';
 import { adminAuth } from '../../middleware/auth.js';
-import { StatsResponseSchema, ErrorSchema } from '../admin.schemas.js';
+import { StatsResponseSchema } from '../admin.schemas.js';
 
 const app = new OpenAPIHono();
 

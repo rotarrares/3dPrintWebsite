@@ -113,3 +113,22 @@ model AdminUser {
   name         String
   createdAt    DateTime @default(now())
 }
+
+model Product {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  price           Decimal  @db.Decimal(10, 2)
+  category        String?
+  imageUrls       Json     // Array of image URLs
+  modelUrl        String?  // URL to 3D model file (.stl, .obj, etc.)
+  modelPreviewUrl String?  // Preview/thumbnail of the 3D model
+  isActive        Boolean  @default(true)
+  isFeatured      Boolean  @default(false)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([isActive, sortOrder])
+  @@index([category])
+}

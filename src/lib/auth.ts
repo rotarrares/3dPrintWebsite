@@ -8,8 +8,8 @@ export interface JWTPayload {
   sub: string;
   email: string;
   name: string;
-  iat: number;
-  exp: number;
+  iat?: number;
+  exp?: number;
 }
 
 /**
@@ -26,15 +26,15 @@ export async function createToken(userId: string, email: string, name: string): 
     exp: now + TOKEN_EXPIRY,
   };
 
-  return sign(payload, JWT_SECRET);
+  return sign(payload as unknown as Record<string, unknown>, JWT_SECRET);
 }
 
 /**
  * Verifies and decodes a JWT token
  */
 export async function verifyToken(token: string): Promise<JWTPayload> {
-  const payload = await verify(token, JWT_SECRET) as JWTPayload;
-  return payload;
+  const payload = await verify(token, JWT_SECRET, 'HS256');
+  return payload as unknown as JWTPayload;
 }
 
 /**
