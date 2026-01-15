@@ -2,21 +2,28 @@ import AdminJS from 'adminjs';
 import AdminJSExpress from '@adminjs/express';
 import * as AdminJSPrisma from '@adminjs/prisma';
 import express from 'express';
-import { resources } from './resources/index.js';
 import { authenticate } from './auth.js';
-
-// Register Prisma adapter
-AdminJS.registerAdapter({
-  Database: AdminJSPrisma.Database,
-  Resource: AdminJSPrisma.Resource,
-});
 
 // Lazy initialization for serverless
 let adminApp: express.Application | null = null;
 let adminJs: AdminJS | null = null;
+let adapterRegistered = false;
 
 function getAdminJs(): AdminJS {
   if (!adminJs) {
+    // Register Prisma adapter lazily
+    if (!adapterRegistered) {
+      AdminJS.registerAdapter({
+        Database: AdminJSPrisma.Database,
+        Resource: AdminJSPrisma.Resource,
+      });
+      adapterRegistered = true;
+    }
+
+    // Import resources lazily
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { resources } = require('./resources/index.js');
+
     adminJs = new AdminJS({
       rootPath: '/admin',
       resources: resources,
