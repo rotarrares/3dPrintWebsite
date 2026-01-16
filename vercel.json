@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "installCommand": "npm install && npm install @rollup/rollup-linux-x64-gnu --force",
+  "installCommand": "npm install && npm install @rollup/rollup-linux-x64-gnu@4 --no-save --force --os=linux --cpu=x64",
   "builds": [
     {
       "src": "api/index.ts",
