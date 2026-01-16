@@ -23,8 +23,12 @@ async function handler(req: VercelRequest, res: VercelResponse) {
   const url = req.url || '';
   const path = url.split('?')[0];
 
+  // Debug logging
+  console.log('[Vercel Handler] URL:', url, 'Path:', path, 'Method:', req.method);
+
   // Route /admin/* to Express AdminJS
   if (path === '/admin' || path.startsWith('/admin/')) {
+    console.log('[Vercel Handler] Routing to AdminJS');
     try {
       const admin = await getAdminApp();
       return admin(req, res);
