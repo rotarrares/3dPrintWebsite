@@ -22,6 +22,7 @@ app.use('*', cors({
     const allowedOrigins = [
       'https://print3d.ro',
       'https://www.print3d.ro',
+      'https://3d-print-website-eight.vercel.app',
     ];
     return allowedOrigins.includes(origin) ? origin : null;
   },
