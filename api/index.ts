@@ -1,8 +1,8 @@
 import { handle } from 'hono/vercel';
-import app from '../src/app-vercel.js';
+import app from '../dist/app.js';
 
-// Note: Admin panel is only available in local development (run: npm run dev)
-// Vercel serverless doesn't properly handle .tsx files
+// Admin panel available at /admin
+// Uses pre-compiled TypeScript from dist/ folder
 
 export const GET = handle(app);
 export const POST = handle(app);
