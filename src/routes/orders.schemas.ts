@@ -34,6 +34,7 @@ export const OrderResponseSchema = z.object({
   shippingMethod: z.string().nullable(),
   shippingCost: z.string().nullable(),
   trackingNumber: z.string().nullable(),
+  subscribeToUpdates: z.boolean(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
   approvedAt: z.string().datetime().nullable(),
@@ -92,5 +93,16 @@ export const OrderIdParamSchema = z.object({
     description: 'ID-ul comenzii',
   }),
 });
+
+// Subscription request
+export const SubscriptionSchema = z.object({
+  subscribe: z.boolean().openapi({ example: true, description: 'true pentru abonare, false pentru dezabonare' }),
+}).openapi('SubscriptionRequest');
+
+// Subscription response
+export const SubscriptionResponseSchema = z.object({
+  subscribeToUpdates: z.boolean(),
+  message: z.string(),
+}).openapi('SubscriptionResponse');
 
 export { ErrorSchema };

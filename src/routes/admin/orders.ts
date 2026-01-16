@@ -6,6 +6,7 @@ import { formatPrice } from '../../lib/utils.js';
 import { uploadFile, deleteFile } from '../../lib/storage.js';
 import { sendApprovalEmail, sendShippingEmail, sendReviewRequestEmail } from '../../lib/email.js';
 import { isValidImageType, isValidFileSize } from '../../lib/utils.js';
+import { triggerOrderStatusUpdate } from '../../workers/orderStatusWorker.js';
 import {
   OrderListQuerySchema,
   OrderListResponseSchema,
@@ -228,6 +229,15 @@ app.openapi(updateOrderRoute, async (c) => {
     data: updateData,
     include: { variants: true, review: true },
   });
+
+  // Trigger order status update notification worker if status changed
+  if (data.status && data.status !== existingOrder.status) {
+    triggerOrderStatusUpdate({
+      order,
+      oldStatus: existingOrder.status,
+      newStatus: data.status,
+    });
+  }
 
   return c.json(formatAdminOrderResponse(order), 200);
 });

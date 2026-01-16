@@ -290,6 +290,11 @@ export const Layout: FC<LayoutProps> = ({ title, children, isLoggedIn = false, c
                     </a>
                   </li>
                   <li>
+                    <a href="/admin/categories" class={currentPath.startsWith('/admin/categories') ? 'active' : ''}>
+                      📁 Categorii
+                    </a>
+                  </li>
+                  <li>
                     <a href="/admin/examples" class={currentPath.startsWith('/admin/examples') ? 'active' : ''}>
                       🖼️ Exemple
                     </a>

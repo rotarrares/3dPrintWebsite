@@ -4,6 +4,7 @@ import dashboardRoutes from './dashboard.js';
 import ordersRoutes from './orders.js';
 import examplesRoutes from './examples.js';
 import productsRoutes from './products.js';
+import categoriesRoutes from './categories.js';
 
 const app = new Hono();
 
@@ -17,5 +18,6 @@ app.route('/', dashboardRoutes);
 app.route('/orders', ordersRoutes);
 app.route('/examples', examplesRoutes);
 app.route('/products', productsRoutes);
+app.route('/categories', categoriesRoutes);
 
 export default app;

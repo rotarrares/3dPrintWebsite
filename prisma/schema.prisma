@@ -44,6 +44,9 @@ model Order {
   stripeSessionId   String?
   stripePaymentId   String?
 
+  // Notifications
+  subscribeToUpdates Boolean     @default(false)
+
   // Timestamps
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
@@ -114,21 +117,56 @@ model AdminUser {
   createdAt    DateTime @default(now())
 }
 
+model ProductCategory {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  imageUrl    String?   // Category picture
+  isActive    Boolean   @default(true)
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  products    Product[]
+
+  @@index([isActive, sortOrder])
+}
+
 model Product {
-  id              String   @id @default(cuid())
+  id              String           @id @default(cuid())
   name            String
   description     String?
-  price           Decimal  @db.Decimal(10, 2)
-  category        String?
-  imageUrls       Json     // Array of image URLs
-  modelUrl        String?  // URL to 3D model file (.stl, .obj, etc.)
-  modelPreviewUrl String?  // Preview/thumbnail of the 3D model
+  basePrice       Decimal          @db.Decimal(10, 2) // Base price before variant adjustments
+  categoryId      String?
+  category        ProductCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  imageUrls       Json             // Array of image URLs (main product images)
+  modelUrl        String?          // URL to 3D model file (.stl, .obj, etc.)
+  modelPreviewUrl String?          // Preview/thumbnail of the 3D model
+  isActive        Boolean          @default(true)
+  isFeatured      Boolean          @default(false)
+  sortOrder       Int              @default(0)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  variants        ProductVariant[]
+
+  @@index([isActive, sortOrder])
+  @@index([categoryId])
+}
+
+model ProductVariant {
+  id              String   @id @default(cuid())
+  productId       String
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name            String?  // Optional variant name (e.g., "Red Large")
+  size            String?  // Size option (e.g., "S", "M", "L", "XL" or "10cm", "20cm")
+  color           String?  // Color option (e.g., "Red", "#FF0000")
+  imageUrls       Json     // Array of image URLs specific to this variant
+  priceAdjustment Decimal  @default(0) @db.Decimal(10, 2) // Price +/- from base price
+  stock           Int      @default(0)
   isActive        Boolean  @default(true)
-  isFeatured      Boolean  @default(false)
   sortOrder       Int      @default(0)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  @@index([isActive, sortOrder])
-  @@index([category])
+  @@index([productId])
+  @@index([isActive])
 }

@@ -1,4 +1,5 @@
 import { OpenAPIHono, createRoute } from '@hono/zod-openapi';
+import { Decimal } from '@prisma/client/runtime/library';
 import { db } from '../lib/db.js';
 import { formatPrice } from '../lib/utils.js';
 import { ErrorSchema, IdParamSchema } from '../schemas/common.js';
@@ -10,6 +11,30 @@ import {
 } from './products.schemas.js';
 
 const app = new OpenAPIHono();
+
+// Helper to format category
+function formatCategory(category: { id: string; name: string; description: string | null; imageUrl: string | null } | null) {
+  if (!category) return null;
+  return {
+    id: category.id,
+    name: category.name,
+    description: category.description,
+    imageUrl: category.imageUrl,
+  };
+}
+
+// Helper to format variant with calculated price
+function formatVariant(variant: any, basePrice: Decimal) {
+  const adjustedPrice = basePrice.add(variant.priceAdjustment);
+  return {
+    id: variant.id,
+    name: variant.name,
+    size: variant.size,
+    color: variant.color,
+    imageUrls: variant.imageUrls as string[],
+    price: formatPrice(adjustedPrice) as string,
+  };
+}
 
 // GET /api/products - List public products
 const listProductsRoute = createRoute({
@@ -34,17 +59,31 @@ const listProductsRoute = createRoute({
 });
 
 app.openapi(listProductsRoute, async (c) => {
-  const { page, limit, category, featured } = c.req.valid('query');
+  const { page, limit, search, category, featured } = c.req.valid('query');
 
-  const where = {
+  const where: any = {
     isActive: true,
-    ...(category && { category }),
+    ...(category && { categoryId: category }),
     ...(featured && { isFeatured: true }),
   };
+
+  if (search) {
+    where.OR = [
+      { name: { contains: search, mode: 'insensitive' } },
+      { description: { contains: search, mode: 'insensitive' } },
+    ];
+  }
 
   const [products, total] = await Promise.all([
     db.product.findMany({
       where,
+      include: {
+        category: true,
+        variants: {
+          where: { isActive: true },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
       skip: (page - 1) * limit,
       take: limit,
@@ -57,12 +96,13 @@ app.openapi(listProductsRoute, async (c) => {
       id: p.id,
       name: p.name,
       description: p.description,
-      price: formatPrice(p.price) as string,
-      category: p.category,
+      basePrice: formatPrice(p.basePrice) as string,
+      category: formatCategory(p.category),
       imageUrls: p.imageUrls as string[],
       modelUrl: p.modelUrl,
       modelPreviewUrl: p.modelPreviewUrl,
       isFeatured: p.isFeatured,
+      variants: p.variants.map(v => formatVariant(v, p.basePrice)),
       createdAt: p.createdAt.toISOString(),
     })),
     pagination: {
@@ -94,17 +134,19 @@ const listCategoriesRoute = createRoute({
 });
 
 app.openapi(listCategoriesRoute, async (c) => {
-  const products = await db.product.findMany({
-    where: { isActive: true, category: { not: null } },
-    select: { category: true },
-    distinct: ['category'],
+  const categories = await db.productCategory.findMany({
+    where: { isActive: true },
+    orderBy: { sortOrder: 'asc' },
   });
 
-  const categories = products
-    .map(p => p.category)
-    .filter((c): c is string => c !== null);
-
-  return c.json({ categories }, 200);
+  return c.json({
+    categories: categories.map(cat => ({
+      id: cat.id,
+      name: cat.name,
+      description: cat.description,
+      imageUrl: cat.imageUrl,
+    })),
+  }, 200);
 });
 
 // GET /api/products/:id - Get single product
@@ -142,6 +184,13 @@ app.openapi(getProductRoute, async (c) => {
 
   const product = await db.product.findFirst({
     where: { id, isActive: true },
+    include: {
+      category: true,
+      variants: {
+        where: { isActive: true },
+        orderBy: { sortOrder: 'asc' },
+      },
+    },
   });
 
   if (!product) {
@@ -156,12 +205,13 @@ app.openapi(getProductRoute, async (c) => {
       id: product.id,
       name: product.name,
       description: product.description,
-      price: formatPrice(product.price) as string,
-      category: product.category,
+      basePrice: formatPrice(product.basePrice) as string,
+      category: formatCategory(product.category),
       imageUrls: product.imageUrls as string[],
       modelUrl: product.modelUrl,
       modelPreviewUrl: product.modelPreviewUrl,
       isFeatured: product.isFeatured,
+      variants: product.variants.map(v => formatVariant(v, product.basePrice)),
       createdAt: product.createdAt.toISOString(),
     },
   }, 200);

@@ -196,6 +196,70 @@ export async function sendReviewRequestEmail(order: Order): Promise<void> {
 }
 
 /**
+ * Sends order status update notification email
+ */
+export async function sendOrderStatusUpdateEmail(
+  order: Order,
+  oldStatus: string,
+  newStatus: string
+): Promise<void> {
+  const statusLabels: Record<string, string> = {
+    RECEIVED: 'Primită',
+    MODELING: 'În modelare',
+    PENDING_APPROVAL: 'Așteaptă aprobare',
+    APPROVED: 'Aprobată',
+    PAID: 'Plătită',
+    PRINTING: 'În printare',
+    SHIPPED: 'Expediată',
+    DELIVERED: 'Livrată',
+    CANCELLED: 'Anulată',
+  };
+
+  const oldStatusLabel = statusLabels[oldStatus] || oldStatus;
+  const newStatusLabel = statusLabels[newStatus] || newStatus;
+
+  await resend.emails.send({
+    from: FROM_EMAIL,
+    to: order.customerEmail,
+    subject: `Status comandă actualizat - ${order.orderNumber}`,
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Status comandă actualizat</title>
+      </head>
+      <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h1 style="color: #2563eb;">Status comandă actualizat</h1>
+        <p>Dragă ${order.customerName},</p>
+        <p>Statusul comenzii tale <strong>${order.orderNumber}</strong> a fost actualizat.</p>
+
+        <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <p style="margin: 5px 0; color: #6b7280;">Status anterior: <span style="text-decoration: line-through;">${oldStatusLabel}</span></p>
+          <p style="margin: 5px 0; font-size: 18px;"><strong>Status nou: ${newStatusLabel}</strong></p>
+        </div>
+
+        <p>Poți urmări statusul comenzii tale accesând:</p>
+        <div style="margin-top: 20px; text-align: center;">
+          <a href="${APP_URL}/comanda/${order.id}"
+             style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+            Vezi comanda
+          </a>
+        </div>
+
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+        <p style="color: #6b7280; font-size: 12px;">
+          Primești acest email deoarece te-ai abonat la actualizări pentru comanda ta.
+          <a href="${APP_URL}/comanda/${order.id}" style="color: #2563eb;">Dezabonează-te</a>
+        </p>
+        <p style="color: #6b7280; font-size: 14px;">Cu drag,<br>Echipa Print3D</p>
+      </body>
+      </html>
+    `,
+  });
+}
+
+/**
  * Sends contact form notification to admin
  */
 export async function sendContactNotification(data: {

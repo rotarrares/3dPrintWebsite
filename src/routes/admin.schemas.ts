@@ -83,6 +83,7 @@ export const AdminOrderResponseSchema = z.object({
   shippingMethod: z.string().nullable(),
   shippingCost: z.string().nullable(),
   trackingNumber: z.string().nullable(),
+  subscribeToUpdates: z.boolean(),
   stripeSessionId: z.string().nullable(),
   stripePaymentId: z.string().nullable(),
   createdAt: z.string().datetime(),
@@ -136,6 +137,120 @@ export const AdminExampleSchema = z.object({
   sortOrder: z.number(),
   createdAt: z.string().datetime(),
 }).openapi('AdminExample');
+
+// ========== Product Category schemas ==========
+export const CreateCategorySchema = z.object({
+  name: z.string().min(2).openapi({ example: 'Figurine' }),
+  description: z.string().optional().openapi({ example: 'Figurine 3D personalizate' }),
+  imageUrl: z.string().url().optional().openapi({ example: 'https://cdn.print3d.ro/categories/figurine.jpg' }),
+  sortOrder: z.number().optional().default(0),
+}).openapi('CreateCategoryRequest');
+
+export const UpdateCategorySchema = z.object({
+  name: z.string().min(2).optional(),
+  description: z.string().optional(),
+  imageUrl: z.string().url().nullable().optional(),
+  isActive: z.boolean().optional(),
+  sortOrder: z.number().optional(),
+}).openapi('UpdateCategoryRequest');
+
+export const AdminCategorySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  imageUrl: z.string().nullable(),
+  isActive: z.boolean(),
+  sortOrder: z.number(),
+  productCount: z.number(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+}).openapi('AdminCategory');
+
+// ========== Product Variant schemas ==========
+export const CreateVariantSchema = z.object({
+  name: z.string().optional().openapi({ example: 'Roșu Mare' }),
+  size: z.string().optional().openapi({ example: 'L' }),
+  color: z.string().optional().openapi({ example: 'Roșu' }),
+  imageUrls: z.array(z.string().url()).min(1).openapi({ example: ['https://cdn.print3d.ro/variants/dragon-red.jpg'] }),
+  priceAdjustment: z.number().optional().default(0).openapi({ example: 10 }),
+  stock: z.number().optional().default(0),
+  sortOrder: z.number().optional().default(0),
+}).openapi('CreateVariantRequest');
+
+export const UpdateVariantSchema = z.object({
+  name: z.string().optional(),
+  size: z.string().optional(),
+  color: z.string().optional(),
+  imageUrls: z.array(z.string().url()).optional(),
+  priceAdjustment: z.number().optional(),
+  stock: z.number().optional(),
+  isActive: z.boolean().optional(),
+  sortOrder: z.number().optional(),
+}).openapi('UpdateVariantRequest');
+
+export const AdminVariantSchema = z.object({
+  id: z.string(),
+  productId: z.string(),
+  name: z.string().nullable(),
+  size: z.string().nullable(),
+  color: z.string().nullable(),
+  imageUrls: z.array(z.string()),
+  priceAdjustment: z.string(),
+  stock: z.number(),
+  isActive: z.boolean(),
+  sortOrder: z.number(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+}).openapi('AdminVariant');
+
+// ========== Product schemas ==========
+export const CreateProductSchema = z.object({
+  name: z.string().min(2).openapi({ example: 'Dragon 3D' }),
+  description: z.string().optional().openapi({ example: 'Un dragon detaliat, perfect pentru decor' }),
+  basePrice: z.number().positive().openapi({ example: 150 }),
+  categoryId: z.string().optional().openapi({ example: 'clx1234567890' }),
+  imageUrls: z.array(z.string().url()).min(1).openapi({ example: ['https://cdn.print3d.ro/products/dragon-1.jpg'] }),
+  modelUrl: z.string().url().optional().openapi({ example: 'https://cdn.print3d.ro/models/dragon.stl' }),
+  modelPreviewUrl: z.string().url().optional().openapi({ example: 'https://cdn.print3d.ro/previews/dragon-preview.jpg' }),
+  isFeatured: z.boolean().optional().default(false),
+  sortOrder: z.number().optional().default(0),
+}).openapi('CreateProductRequest');
+
+export const UpdateProductSchema = z.object({
+  name: z.string().min(2).optional(),
+  description: z.string().optional(),
+  basePrice: z.number().positive().optional(),
+  categoryId: z.string().nullable().optional(),
+  imageUrls: z.array(z.string().url()).optional(),
+  modelUrl: z.string().url().nullable().optional(),
+  modelPreviewUrl: z.string().url().nullable().optional(),
+  isActive: z.boolean().optional(),
+  isFeatured: z.boolean().optional(),
+  sortOrder: z.number().optional(),
+}).openapi('UpdateProductRequest');
+
+export const AdminProductSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  basePrice: z.string(),
+  categoryId: z.string().nullable(),
+  categoryName: z.string().nullable(),
+  imageUrls: z.array(z.string()),
+  modelUrl: z.string().nullable(),
+  modelPreviewUrl: z.string().nullable(),
+  isActive: z.boolean(),
+  isFeatured: z.boolean(),
+  sortOrder: z.number(),
+  variantsCount: z.number(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+}).openapi('AdminProduct');
+
+export const AdminProductDetailSchema = AdminProductSchema.extend({
+  variants: z.array(AdminVariantSchema),
+  category: AdminCategorySchema.omit({ productCount: true }).nullable(),
+}).openapi('AdminProductDetail');
 
 // Stats schema
 export const StatsResponseSchema = z.object({

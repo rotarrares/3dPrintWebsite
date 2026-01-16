@@ -13,6 +13,8 @@ import {
   CreateReviewSchema,
   ReviewResponseSchema,
   OrderIdParamSchema,
+  SubscriptionSchema,
+  SubscriptionResponseSchema,
   ErrorSchema,
 } from './orders.schemas.js';
 
@@ -450,6 +452,67 @@ app.openapi(createReviewRoute, async (c) => {
     isPublic: review.isPublic,
     createdAt: review.createdAt.toISOString(),
   }, 201);
+});
+
+// POST /api/orders/:id/subscription - Subscribe/unsubscribe to order updates
+const subscriptionRoute = createRoute({
+  method: 'post',
+  path: '/{id}/subscription',
+  tags: ['Orders'],
+  summary: 'Abonare/dezabonare actualizări comandă',
+  description: 'Clientul poate să se aboneze sau dezaboneze de la notificări despre statusul comenzii.',
+  request: {
+    params: OrderIdParamSchema,
+    body: {
+      content: {
+        'application/json': {
+          schema: SubscriptionSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Preferință actualizată',
+      content: {
+        'application/json': {
+          schema: SubscriptionResponseSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Comanda nu există',
+      content: {
+        'application/json': {
+          schema: ErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+app.openapi(subscriptionRoute, async (c) => {
+  const { id } = c.req.valid('param');
+  const { subscribe } = c.req.valid('json');
+
+  const order = await db.order.findUnique({
+    where: { id },
+  });
+
+  if (!order) {
+    return c.json({ error: 'not_found', message: 'Comanda nu există' }, 404);
+  }
+
+  await db.order.update({
+    where: { id },
+    data: { subscribeToUpdates: subscribe },
+  });
+
+  const message = subscribe
+    ? 'Te-ai abonat la actualizări pentru această comandă'
+    : 'Te-ai dezabonat de la actualizări pentru această comandă';
+
+  return c.json({ subscribeToUpdates: subscribe, message }, 200);
 });
 
 export default app;

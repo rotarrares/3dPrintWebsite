@@ -20,21 +20,21 @@ app.get('/', async (c) => {
 
   const where: any = {};
   if (category) {
-    where.category = category;
+    where.categoryId = category;
   }
 
   const [products, total, categories] = await Promise.all([
     db.product.findMany({
       where,
+      include: { category: true },
       orderBy: { sortOrder: 'asc' },
       skip: (page - 1) * limit,
       take: limit,
     }),
     db.product.count({ where }),
-    db.product.findMany({
-      select: { category: true },
-      distinct: ['category'],
-      where: { category: { not: null } },
+    db.productCategory.findMany({
+      where: { isActive: true },
+      orderBy: { sortOrder: 'asc' },
     }),
   ]);
 
@@ -64,8 +64,8 @@ app.get('/', async (c) => {
           <select name="category" style={{ flex: 1 }}>
             <option value="">Toate categoriile</option>
             {categories.map((cat) => (
-              <option value={cat.category || ''} selected={category === cat.category}>
-                {cat.category}
+              <option value={cat.id} selected={category === cat.id}>
+                {cat.name}
               </option>
             ))}
           </select>
@@ -108,8 +108,8 @@ app.get('/', async (c) => {
                       </p>
                     )}
                   </td>
-                  <td>{product.category || '-'}</td>
-                  <td>{formatPrice(product.price)}</td>
+                  <td>{product.category?.name || '-'}</td>
+                  <td>{formatPrice(product.basePrice)}</td>
                   <td>{product.sortOrder}</td>
                   <td>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
@@ -229,8 +229,8 @@ async function handleProductFormSubmit(event) {
     const formData = new FormData();
     formData.append('name', form.querySelector('input[name="name"]').value);
     formData.append('description', form.querySelector('textarea[name="description"]').value);
-    formData.append('price', form.querySelector('input[name="price"]').value);
-    formData.append('category', form.querySelector('input[name="category"]').value);
+    formData.append('basePrice', form.querySelector('input[name="basePrice"]').value);
+    formData.append('categoryId', form.querySelector('select[name="categoryId"]').value);
     formData.append('sortOrder', form.querySelector('input[name="sortOrder"]').value);
     formData.append('isActive', form.querySelector('input[name="isActive"]').checked ? 'on' : '');
     formData.append('isFeatured', form.querySelector('input[name="isFeatured"]').checked ? 'on' : '');
@@ -265,6 +265,11 @@ app.get('/new', async (c) => {
     return c.redirect('/admin/login');
   }
 
+  const categories = await db.productCategory.findMany({
+    where: { isActive: true },
+    orderBy: { sortOrder: 'asc' },
+  });
+
   return c.html(
     <Layout title="Produs nou" isLoggedIn={true} currentPath="/admin/products">
       <div class="header-actions">
@@ -292,13 +297,18 @@ app.get('/new', async (c) => {
 
           <div class="grid">
             <label>
-              Preț (RON) *
-              <input type="number" name="price" required step="0.01" min="0" placeholder="0.00" />
+              Preț de bază (RON) *
+              <input type="number" name="basePrice" required step="0.01" min="0" placeholder="0.00" />
             </label>
 
             <label>
               Categorie
-              <input type="text" name="category" placeholder="Ex: Figurine, Cadouri" />
+              <select name="categoryId">
+                <option value="">Fără categorie</option>
+                {categories.map((cat) => (
+                  <option value={cat.id}>{cat.name}</option>
+                ))}
+              </select>
             </label>
           </div>
 
@@ -359,8 +369,8 @@ app.post('/new', async (c) => {
   const formData = await c.req.formData();
   const name = formData.get('name') as string;
   const description = formData.get('description') as string || null;
-  const price = parseFloat(formData.get('price') as string);
-  const category = formData.get('category') as string || null;
+  const basePrice = parseFloat(formData.get('basePrice') as string);
+  const categoryId = formData.get('categoryId') as string || null;
   const sortOrder = parseInt(formData.get('sortOrder') as string) || 0;
   const isActive = formData.get('isActive') === 'on';
   const isFeatured = formData.get('isFeatured') === 'on';
@@ -381,8 +391,8 @@ app.post('/new', async (c) => {
     data: {
       name,
       description,
-      price,
-      category,
+      basePrice,
+      categoryId: categoryId || null,
       sortOrder,
       isActive,
       isFeatured,
@@ -464,8 +474,8 @@ async function handleEditFormSubmit(event) {
     const formData = new FormData();
     formData.append('name', form.querySelector('input[name="name"]').value);
     formData.append('description', form.querySelector('textarea[name="description"]').value);
-    formData.append('price', form.querySelector('input[name="price"]').value);
-    formData.append('category', form.querySelector('input[name="category"]').value);
+    formData.append('basePrice', form.querySelector('input[name="basePrice"]').value);
+    formData.append('categoryId', form.querySelector('select[name="categoryId"]').value);
     formData.append('sortOrder', form.querySelector('input[name="sortOrder"]').value);
     formData.append('isActive', form.querySelector('input[name="isActive"]').checked ? 'on' : '');
     formData.append('isFeatured', form.querySelector('input[name="isFeatured"]').checked ? 'on' : '');
@@ -501,7 +511,13 @@ app.get('/:id', async (c) => {
   }
 
   const id = c.req.param('id');
-  const product = await db.product.findUnique({ where: { id } });
+  const [product, categories] = await Promise.all([
+    db.product.findUnique({ where: { id } }),
+    db.productCategory.findMany({
+      where: { isActive: true },
+      orderBy: { sortOrder: 'asc' },
+    }),
+  ]);
 
   if (!product) {
     return c.redirect('/admin/products');
@@ -536,13 +552,20 @@ app.get('/:id', async (c) => {
 
           <div class="grid">
             <label>
-              Preț (RON) *
-              <input type="number" name="price" required step="0.01" min="0" value={Number(product.price)} />
+              Preț de bază (RON) *
+              <input type="number" name="basePrice" required step="0.01" min="0" value={Number(product.basePrice)} />
             </label>
 
             <label>
               Categorie
-              <input type="text" name="category" value={product.category || ''} />
+              <select name="categoryId">
+                <option value="">Fără categorie</option>
+                {categories.map((cat) => (
+                  <option value={cat.id} selected={product.categoryId === cat.id}>
+                    {cat.name}
+                  </option>
+                ))}
+              </select>
             </label>
           </div>
 
@@ -643,8 +666,8 @@ app.post('/:id/update', async (c) => {
 
   const name = formData.get('name') as string;
   const description = formData.get('description') as string || null;
-  const price = parseFloat(formData.get('price') as string);
-  const category = formData.get('category') as string || null;
+  const basePrice = parseFloat(formData.get('basePrice') as string);
+  const categoryId = formData.get('categoryId') as string || null;
   const sortOrder = parseInt(formData.get('sortOrder') as string) || 0;
   const isActive = formData.get('isActive') === 'on';
   const isFeatured = formData.get('isFeatured') === 'on';
@@ -675,8 +698,8 @@ app.post('/:id/update', async (c) => {
     data: {
       name,
       description,
-      price,
-      category,
+      basePrice,
+      categoryId: categoryId || null,
       sortOrder,
       isActive,
       isFeatured,
