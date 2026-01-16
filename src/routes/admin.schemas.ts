@@ -214,6 +214,11 @@ export const CreateProductSchema = z.object({
   modelPreviewUrl: z.string().url().optional().openapi({ example: 'https://cdn.print3d.ro/previews/dragon-preview.jpg' }),
   isFeatured: z.boolean().optional().default(false),
   sortOrder: z.number().optional().default(0),
+  // SEO fields
+  slug: z.string().regex(/^[a-z0-9-]+$/).optional().openapi({ example: 'dragon-3d-figurina' }),
+  metaTitle: z.string().max(70).optional().openapi({ example: 'Dragon 3D - Figurină Decorativă' }),
+  metaDescription: z.string().max(160).optional().openapi({ example: 'Figurină dragon 3D printată, perfectă pentru decor sau colecție.' }),
+  metaKeywords: z.string().optional().openapi({ example: 'dragon, figurina, 3d print, decor' }),
 }).openapi('CreateProductRequest');
 
 export const UpdateProductSchema = z.object({
@@ -227,6 +232,11 @@ export const UpdateProductSchema = z.object({
   isActive: z.boolean().optional(),
   isFeatured: z.boolean().optional(),
   sortOrder: z.number().optional(),
+  // SEO fields
+  slug: z.string().regex(/^[a-z0-9-]+$/).nullable().optional(),
+  metaTitle: z.string().max(70).nullable().optional(),
+  metaDescription: z.string().max(160).nullable().optional(),
+  metaKeywords: z.string().nullable().optional(),
 }).openapi('UpdateProductRequest');
 
 export const AdminProductSchema = z.object({
@@ -243,6 +253,11 @@ export const AdminProductSchema = z.object({
   isFeatured: z.boolean(),
   sortOrder: z.number(),
   variantsCount: z.number(),
+  // SEO fields
+  slug: z.string().nullable(),
+  metaTitle: z.string().nullable(),
+  metaDescription: z.string().nullable(),
+  metaKeywords: z.string().nullable(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 }).openapi('AdminProduct');

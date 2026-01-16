@@ -299,6 +299,11 @@ export const Layout: FC<LayoutProps> = ({ title, children, isLoggedIn = false, c
                       🖼️ Exemple
                     </a>
                   </li>
+                  <li>
+                    <a href="/admin/files" class={currentPath.startsWith('/admin/files') ? 'active' : ''}>
+                      📁 Fișiere R2
+                    </a>
+                  </li>
                 </ul>
               </nav>
               <div style={{ marginTop: 'auto', paddingTop: '2rem' }}>

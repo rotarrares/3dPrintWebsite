@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const s3 = new S3Client({
@@ -115,4 +115,37 @@ export async function getPresignedUploadUrl(
     publicUrl: `${process.env.R2_PUBLIC_URL}/${key}`,
     key,
   };
+}
+
+export interface R2File {
+  key: string;
+  url: string;
+  size: number;
+  lastModified: Date;
+  filename: string;
+}
+
+/**
+ * Lists files from R2 storage in a specific folder
+ * @param folder - The folder to list files from (e.g., 'models', 'products')
+ * @param maxKeys - Maximum number of files to return (default 1000)
+ * @returns Array of R2File objects
+ */
+export async function listFiles(folder: string, maxKeys: number = 1000): Promise<R2File[]> {
+  const command = new ListObjectsV2Command({
+    Bucket: process.env.R2_BUCKET_NAME,
+    Prefix: folder ? `${folder}/` : undefined,
+    MaxKeys: maxKeys,
+  });
+
+  const response = await s3.send(command);
+  const publicUrl = process.env.R2_PUBLIC_URL || '';
+
+  return (response.Contents || []).map((obj) => ({
+    key: obj.Key || '',
+    url: `${publicUrl}/${obj.Key}`,
+    size: obj.Size || 0,
+    lastModified: obj.LastModified || new Date(),
+    filename: (obj.Key || '').split('/').pop() || '',
+  }));
 }

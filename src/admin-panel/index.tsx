@@ -5,6 +5,7 @@ import ordersRoutes from './orders.js';
 import examplesRoutes from './examples.js';
 import productsRoutes from './products.js';
 import categoriesRoutes from './categories.js';
+import filesRoutes from './files.js';
 
 const app = new Hono();
 
@@ -19,5 +20,6 @@ app.route('/orders', ordersRoutes);
 app.route('/examples', examplesRoutes);
 app.route('/products', productsRoutes);
 app.route('/categories', categoriesRoutes);
+app.route('/files', filesRoutes);
 
 export default app;

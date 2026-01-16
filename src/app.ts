@@ -23,7 +23,7 @@ app.use('*', cors({
       'https://print3d.ro',
       'https://www.print3d.ro',
       'https://3d-print-website-eight.vercel.app',
-      'https://online-shop-two-phi.vercel.app/'
+      'https://online-shop-two-phi.vercel.app'
     ];
     return allowedOrigins.includes(origin) ? origin : null;
   },

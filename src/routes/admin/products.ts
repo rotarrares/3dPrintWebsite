@@ -37,6 +37,11 @@ function formatProduct(product: any) {
     isFeatured: product.isFeatured,
     sortOrder: product.sortOrder,
     variantsCount: product._count?.variants || 0,
+    // SEO fields
+    slug: product.slug,
+    metaTitle: product.metaTitle,
+    metaDescription: product.metaDescription,
+    metaKeywords: product.metaKeywords,
     createdAt: product.createdAt.toISOString(),
     updatedAt: product.updatedAt.toISOString(),
   };

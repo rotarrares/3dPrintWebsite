@@ -58,6 +58,9 @@ app.get('/', async (c) => {
       {message === 'deleted' && (
         <Alert type="success" message="Produsul a fost șters cu succes!" />
       )}
+      {message === 'duplicated' && (
+        <Alert type="success" message="Produsul a fost duplicat cu succes!" />
+      )}
 
       <form method="get" action="/admin/products">
         <div class="search-filters">
@@ -127,6 +130,11 @@ app.get('/', async (c) => {
                     <a href={`/admin/products/${product.id}`} role="button" class="outline secondary">
                       Editează
                     </a>
+                    <form method="post" action={`/admin/products/${product.id}/duplicate`} style={{ display: 'inline' }}>
+                      <button type="submit" class="outline secondary">
+                        Duplică
+                      </button>
+                    </form>
                     <form method="post" action={`/admin/products/${product.id}/delete`} style={{ display: 'inline' }}>
                       <button type="submit" class="outline secondary" style={{ color: 'var(--pico-del-color)' }}
                               onclick="return confirm('Ești sigur că vrei să ștergi acest produs?')">
@@ -237,6 +245,11 @@ async function handleProductFormSubmit(event) {
     formData.append('modelUrl', form.querySelector('input[name="modelUrl"]').value);
     formData.append('modelPreviewUrl', form.querySelector('input[name="modelPreviewUrl"]').value);
     formData.append('imageUrls', form.querySelector('input[name="imageUrls"]').value);
+    // SEO fields
+    formData.append('slug', form.querySelector('input[name="slug"]').value);
+    formData.append('metaTitle', form.querySelector('input[name="metaTitle"]').value);
+    formData.append('metaDescription', form.querySelector('textarea[name="metaDescription"]').value);
+    formData.append('metaKeywords', form.querySelector('input[name="metaKeywords"]').value);
 
     const response = await fetch(form.action, {
       method: 'POST',
@@ -330,6 +343,35 @@ app.get('/new', async (c) => {
             </div>
           </div>
 
+          <details style={{ marginBottom: '1rem' }}>
+            <summary style={{ cursor: 'pointer', fontWeight: 'bold' }}>SEO & Metadata</summary>
+            <div style={{ marginTop: '1rem' }}>
+              <label>
+                Slug (URL)
+                <input type="text" name="slug" placeholder="url-friendly-name" pattern="[a-z0-9-]+" />
+                <small>Identificator unic pentru URL (doar litere mici, cifre și cratimă). Ex: figurina-dragon-3d</small>
+              </label>
+
+              <label>
+                Meta Title
+                <input type="text" name="metaTitle" placeholder="Titlu pentru SEO" maxlength={70} />
+                <small>Titlul paginii pentru motoarele de căutare (max 70 caractere)</small>
+              </label>
+
+              <label>
+                Meta Description
+                <textarea name="metaDescription" rows={2} placeholder="Descriere pentru motoarele de căutare" maxlength={160}></textarea>
+                <small>Descrierea paginii pentru motoarele de căutare (max 160 caractere)</small>
+              </label>
+
+              <label>
+                Meta Keywords
+                <input type="text" name="metaKeywords" placeholder="cuvânt1, cuvânt2, cuvânt3" />
+                <small>Cuvinte cheie separate prin virgulă</small>
+              </label>
+            </div>
+          </details>
+
           <label>
             Fișier model 3D (opțional)
             <input type="file" name="modelFile" accept=".stl,.obj,.gltf,.glb,.3mf,.step,.stp" />
@@ -380,6 +422,12 @@ app.post('/new', async (c) => {
   const modelPreviewUrl = formData.get('modelPreviewUrl') as string || null;
   const imageUrlsJson = formData.get('imageUrls') as string || '[]';
 
+  // SEO fields
+  const slug = formData.get('slug') as string || null;
+  const metaTitle = formData.get('metaTitle') as string || null;
+  const metaDescription = formData.get('metaDescription') as string || null;
+  const metaKeywords = formData.get('metaKeywords') as string || null;
+
   let imageUrls: string[] = [];
   try {
     imageUrls = JSON.parse(imageUrlsJson);
@@ -399,6 +447,10 @@ app.post('/new', async (c) => {
       modelUrl: modelUrl || null,
       modelPreviewUrl: modelPreviewUrl || null,
       imageUrls,
+      slug: slug || null,
+      metaTitle: metaTitle || null,
+      metaDescription: metaDescription || null,
+      metaKeywords: metaKeywords || null,
     },
   });
 
@@ -482,6 +534,11 @@ async function handleEditFormSubmit(event) {
     formData.append('newModelUrl', form.querySelector('input[name="newModelUrl"]').value);
     formData.append('newModelPreviewUrl', form.querySelector('input[name="newModelPreviewUrl"]').value);
     formData.append('newImageUrls', form.querySelector('input[name="newImageUrls"]').value);
+    // SEO fields
+    formData.append('slug', form.querySelector('input[name="slug"]').value);
+    formData.append('metaTitle', form.querySelector('input[name="metaTitle"]').value);
+    formData.append('metaDescription', form.querySelector('textarea[name="metaDescription"]').value);
+    formData.append('metaKeywords', form.querySelector('input[name="metaKeywords"]').value);
 
     const response = await fetch(form.action, {
       method: 'POST',
@@ -587,6 +644,35 @@ app.get('/:id', async (c) => {
             </div>
           </div>
 
+          <details open={!!(product.slug || product.metaTitle || product.metaDescription || product.metaKeywords)} style={{ marginBottom: '1rem' }}>
+            <summary style={{ cursor: 'pointer', fontWeight: 'bold' }}>SEO & Metadata</summary>
+            <div style={{ marginTop: '1rem' }}>
+              <label>
+                Slug (URL)
+                <input type="text" name="slug" value={product.slug || ''} placeholder="url-friendly-name" pattern="[a-z0-9-]+" />
+                <small>Identificator unic pentru URL (doar litere mici, cifre și cratimă). Ex: figurina-dragon-3d</small>
+              </label>
+
+              <label>
+                Meta Title
+                <input type="text" name="metaTitle" value={product.metaTitle || ''} placeholder="Titlu pentru SEO" maxlength={70} />
+                <small>Titlul paginii pentru motoarele de căutare (max 70 caractere)</small>
+              </label>
+
+              <label>
+                Meta Description
+                <textarea name="metaDescription" rows={2} placeholder="Descriere pentru motoarele de căutare" maxlength={160}>{product.metaDescription || ''}</textarea>
+                <small>Descrierea paginii pentru motoarele de căutare (max 160 caractere)</small>
+              </label>
+
+              <label>
+                Meta Keywords
+                <input type="text" name="metaKeywords" value={product.metaKeywords || ''} placeholder="cuvânt1, cuvânt2, cuvânt3" />
+                <small>Cuvinte cheie separate prin virgulă</small>
+              </label>
+            </div>
+          </details>
+
           {product.modelUrl && (
             <div style={{ marginBottom: '1rem' }}>
               <label>Model 3D curent:</label>
@@ -677,6 +763,12 @@ app.post('/:id/update', async (c) => {
   const newModelPreviewUrl = formData.get('newModelPreviewUrl') as string || '';
   const newImageUrlsJson = formData.get('newImageUrls') as string || '[]';
 
+  // SEO fields
+  const slug = formData.get('slug') as string || null;
+  const metaTitle = formData.get('metaTitle') as string || null;
+  const metaDescription = formData.get('metaDescription') as string || null;
+  const metaKeywords = formData.get('metaKeywords') as string || null;
+
   // Use new URLs if provided, otherwise keep existing
   const modelUrl = newModelUrl || product.modelUrl;
   const modelPreviewUrl = newModelPreviewUrl || product.modelPreviewUrl;
@@ -706,6 +798,10 @@ app.post('/:id/update', async (c) => {
       modelUrl,
       modelPreviewUrl,
       imageUrls,
+      slug: slug || null,
+      metaTitle: metaTitle || null,
+      metaDescription: metaDescription || null,
+      metaKeywords: metaKeywords || null,
     },
   });
 
@@ -724,6 +820,42 @@ app.post('/:id/delete', async (c) => {
   await db.product.delete({ where: { id } });
 
   return c.redirect('/admin/products?message=deleted');
+});
+
+// Duplicate product
+app.post('/:id/duplicate', async (c) => {
+  const { isLoggedIn } = await checkAdminAuth(c);
+  if (!isLoggedIn) {
+    return c.redirect('/admin/login');
+  }
+
+  const id = c.req.param('id');
+  const product = await db.product.findUnique({ where: { id } });
+
+  if (!product) {
+    return c.redirect('/admin/products');
+  }
+
+  await db.product.create({
+    data: {
+      name: `${product.name} (copie)`,
+      description: product.description,
+      basePrice: product.basePrice,
+      categoryId: product.categoryId,
+      sortOrder: product.sortOrder,
+      isActive: false,
+      isFeatured: false,
+      modelUrl: product.modelUrl,
+      modelPreviewUrl: product.modelPreviewUrl,
+      imageUrls: product.imageUrls as string[],
+      // SEO fields (slug excluded - must be unique)
+      metaTitle: product.metaTitle,
+      metaDescription: product.metaDescription,
+      metaKeywords: product.metaKeywords,
+    },
+  });
+
+  return c.redirect('/admin/products?message=duplicated');
 });
 
 export default app;
