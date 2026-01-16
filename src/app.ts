@@ -3,6 +3,7 @@ import { swaggerUI } from '@hono/swagger-ui';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import apiRoutes from './routes/index.js';
+import adminPanelRoutes from './admin-panel/index.js';
 import { errorHandler } from './middleware/error.js';
 
 const app = new OpenAPIHono();
@@ -36,6 +37,9 @@ app.get('/health', (c) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+// Admin panel (HTML UI)
+app.route('/admin', adminPanelRoutes);
 
 // API routes
 app.route('/api', apiRoutes);

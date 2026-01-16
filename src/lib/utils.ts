@@ -37,6 +37,15 @@ export function isValidImageType(mimeType: string): boolean {
 }
 
 /**
+ * Validates file type for 3D model uploads
+ */
+export function isValid3DModelType(filename: string): boolean {
+  const validExtensions = ['.stl', '.obj', '.gltf', '.glb', '.3mf', '.step', '.stp'];
+  const ext = filename.toLowerCase().substring(filename.lastIndexOf('.'));
+  return validExtensions.includes(ext);
+}
+
+/**
  * Maximum file size for uploads (10MB)
  */
 export const MAX_FILE_SIZE = 10 * 1024 * 1024;

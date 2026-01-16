@@ -1,8 +1,8 @@
 import { handle } from 'hono/vercel';
 import app from '../src/app.js';
 
-// Admin panel is not available on Vercel due to rollup native binary issues
-// Use local development (npm run dev) to access the admin panel
+// Admin panel is available at /admin
+// Built with Hono JSX for full Vercel serverless compatibility
 
 export const GET = handle(app);
 export const POST = handle(app);
