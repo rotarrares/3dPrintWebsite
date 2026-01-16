@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "installCommand": "npm install --include=optional",
+  "installCommand": "npm install && npm install @rollup/rollup-linux-x64-gnu --force",
   "builds": [
     {
       "src": "api/index.ts",

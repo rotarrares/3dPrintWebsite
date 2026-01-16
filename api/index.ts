@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-// Everything is lazy-loaded
+// Lazy-loaded handlers
 let honoHandler: any = null;
 let adminApp: any = null;
 
@@ -21,16 +21,12 @@ async function getAdminApp() {
   return adminApp;
 }
 
-// Single default export handler (Vercel standard pattern)
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const url = req.url || '';
   const path = url.split('?')[0];
 
-  console.log('=== HANDLER CALLED ===', path);
-
   // Route /admin/* to Express AdminJS
   if (path === '/admin' || path.startsWith('/admin/')) {
-    console.log('=== ROUTING TO ADMIN ===');
     try {
       const admin = await getAdminApp();
       return admin(req, res);
@@ -42,7 +38,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // Route everything else to Hono
-  console.log('=== ROUTING TO HONO ===');
   const hono = await getHonoHandler();
   return hono(req);
 }
