@@ -1,9 +1,11 @@
+// Vercel-specific app entry point (without admin panel)
+// Admin panel uses .tsx files which Vercel's @vercel/node doesn't handle correctly
+
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { swaggerUI } from '@hono/swagger-ui';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import apiRoutes from './routes/index.js';
-import adminPanelRoutes from './admin-panel/index.js';
 import { errorHandler } from './middleware/error.js';
 
 const app = new OpenAPIHono();
@@ -38,9 +40,8 @@ app.get('/health', (c) => {
   });
 });
 
-// Admin panel (HTML UI) - for local development
-// On Vercel, use app-vercel.ts which excludes the admin panel
-app.route('/admin', adminPanelRoutes);
+// Note: Admin panel is only available in local development
+// Access at http://localhost:3001/admin
 
 // API routes
 app.route('/api', apiRoutes);
