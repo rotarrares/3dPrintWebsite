@@ -153,6 +153,111 @@ app.get('/', async (c) => {
   );
 });
 
+// Upload script for direct R2 uploads
+const uploadScript = `
+async function uploadFileToR2(file, folder) {
+  // Get presigned URL
+  const response = await fetch('/api/admin/upload/presigned-url', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      filename: file.name,
+      contentType: file.type || 'application/octet-stream',
+      folder: folder
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to get presigned URL');
+  }
+
+  const { uploadUrl, publicUrl } = await response.json();
+
+  // Upload directly to R2
+  const uploadResponse = await fetch(uploadUrl, {
+    method: 'PUT',
+    body: file,
+    headers: { 'Content-Type': file.type || 'application/octet-stream' }
+  });
+
+  if (!uploadResponse.ok) {
+    throw new Error('Failed to upload file to R2');
+  }
+
+  return publicUrl;
+}
+
+async function handleProductFormSubmit(event) {
+  event.preventDefault();
+  const form = event.target;
+  const submitBtn = form.querySelector('button[type="submit"]');
+  const originalText = submitBtn.textContent;
+
+  try {
+    submitBtn.disabled = true;
+    submitBtn.textContent = '⏳ Se încarcă...';
+
+    // Upload 3D model if present
+    const modelInput = form.querySelector('input[name="modelFile"]');
+    if (modelInput.files.length > 0) {
+      submitBtn.textContent = '⏳ Se încarcă modelul 3D...';
+      const url = await uploadFileToR2(modelInput.files[0], 'models');
+      form.querySelector('input[name="modelUrl"]').value = url;
+    }
+
+    // Upload model preview if present
+    const previewInput = form.querySelector('input[name="modelPreviewFile"]');
+    if (previewInput.files.length > 0) {
+      submitBtn.textContent = '⏳ Se încarcă preview-ul...';
+      const url = await uploadFileToR2(previewInput.files[0], 'models');
+      form.querySelector('input[name="modelPreviewUrl"]').value = url;
+    }
+
+    // Upload product images
+    const imagesInput = form.querySelector('input[name="images"]');
+    const imageUrls = [];
+    for (let i = 0; i < imagesInput.files.length; i++) {
+      submitBtn.textContent = \`⏳ Se încarcă imaginea \${i + 1}/\${imagesInput.files.length}...\`;
+      const url = await uploadFileToR2(imagesInput.files[i], 'products');
+      imageUrls.push(url);
+    }
+    form.querySelector('input[name="imageUrls"]').value = JSON.stringify(imageUrls);
+
+    // Submit form data (without files)
+    submitBtn.textContent = '⏳ Se salvează...';
+
+    const formData = new FormData();
+    formData.append('name', form.querySelector('input[name="name"]').value);
+    formData.append('description', form.querySelector('textarea[name="description"]').value);
+    formData.append('price', form.querySelector('input[name="price"]').value);
+    formData.append('category', form.querySelector('input[name="category"]').value);
+    formData.append('sortOrder', form.querySelector('input[name="sortOrder"]').value);
+    formData.append('isActive', form.querySelector('input[name="isActive"]').checked ? 'on' : '');
+    formData.append('isFeatured', form.querySelector('input[name="isFeatured"]').checked ? 'on' : '');
+    formData.append('modelUrl', form.querySelector('input[name="modelUrl"]').value);
+    formData.append('modelPreviewUrl', form.querySelector('input[name="modelPreviewUrl"]').value);
+    formData.append('imageUrls', form.querySelector('input[name="imageUrls"]').value);
+
+    const response = await fetch(form.action, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (response.redirected) {
+      window.location.href = response.url;
+    } else if (response.ok) {
+      window.location.href = '/admin/products?message=created';
+    } else {
+      throw new Error('Failed to save product');
+    }
+  } catch (error) {
+    alert('Eroare: ' + error.message);
+    submitBtn.disabled = false;
+    submitBtn.textContent = originalText;
+  }
+}
+`;
+
 // New product form
 app.get('/new', async (c) => {
   const { isLoggedIn } = await checkAdminAuth(c);
@@ -170,7 +275,11 @@ app.get('/new', async (c) => {
       </div>
 
       <article>
-        <form method="post" action="/admin/products/new" enctype="multipart/form-data">
+        <form id="productForm" method="post" action="/admin/products/new" onsubmit="handleProductFormSubmit(event)">
+          <input type="hidden" name="modelUrl" value="" />
+          <input type="hidden" name="modelPreviewUrl" value="" />
+          <input type="hidden" name="imageUrls" value="[]" />
+
           <label>
             Nume *
             <input type="text" name="name" required placeholder="Numele produsului" />
@@ -214,7 +323,7 @@ app.get('/new', async (c) => {
           <label>
             Fișier model 3D (opțional)
             <input type="file" name="modelFile" accept=".stl,.obj,.gltf,.glb,.3mf,.step,.stp" />
-            <small>Formate acceptate: STL, OBJ, GLTF, GLB, 3MF, STEP</small>
+            <small>Formate acceptate: STL, OBJ, GLTF, GLB, 3MF, STEP (max 100MB)</small>
           </label>
 
           <label>
@@ -234,11 +343,13 @@ app.get('/new', async (c) => {
           </div>
         </form>
       </article>
+
+      <script dangerouslySetInnerHTML={{ __html: uploadScript }} />
     </Layout>
   );
 });
 
-// Create product
+// Create product (accepts pre-uploaded URLs from direct R2 upload)
 app.post('/new', async (c) => {
   const { isLoggedIn } = await checkAdminAuth(c);
   if (!isLoggedIn) {
@@ -253,38 +364,17 @@ app.post('/new', async (c) => {
   const sortOrder = parseInt(formData.get('sortOrder') as string) || 0;
   const isActive = formData.get('isActive') === 'on';
   const isFeatured = formData.get('isFeatured') === 'on';
-  const modelFile = formData.get('modelFile');
-  const modelPreviewFile = formData.get('modelPreviewFile');
-  const images = formData.getAll('images');
 
-  const { uploadFile } = await import('../lib/storage.js');
-  const { isValidImageType, isValidFileSize, isValid3DModelType } = await import('../lib/utils.js');
+  // Get pre-uploaded URLs (from direct R2 upload)
+  const modelUrl = formData.get('modelUrl') as string || null;
+  const modelPreviewUrl = formData.get('modelPreviewUrl') as string || null;
+  const imageUrlsJson = formData.get('imageUrls') as string || '[]';
 
-  // Upload 3D model file if provided
-  let modelUrl: string | null = null;
-  if (modelFile instanceof File && modelFile.size > 0) {
-    if (isValid3DModelType(modelFile.name) && isValidFileSize(modelFile.size)) {
-      modelUrl = await uploadFile(modelFile, 'models');
-    }
-  }
-
-  // Upload model preview image if provided
-  let modelPreviewUrl: string | null = null;
-  if (modelPreviewFile instanceof File && modelPreviewFile.size > 0) {
-    if (isValidImageType(modelPreviewFile.type) && isValidFileSize(modelPreviewFile.size)) {
-      modelPreviewUrl = await uploadFile(modelPreviewFile, 'models');
-    }
-  }
-
-  // Upload product images
-  const imageUrls: string[] = [];
-  for (const image of images) {
-    if (!(image instanceof File)) continue;
-    if (!isValidImageType(image.type)) continue;
-    if (!isValidFileSize(image.size)) continue;
-
-    const url = await uploadFile(image, 'products');
-    imageUrls.push(url);
+  let imageUrls: string[] = [];
+  try {
+    imageUrls = JSON.parse(imageUrlsJson);
+  } catch {
+    imageUrls = [];
   }
 
   await db.product.create({
@@ -296,14 +386,112 @@ app.post('/new', async (c) => {
       sortOrder,
       isActive,
       isFeatured,
-      modelUrl,
-      modelPreviewUrl,
+      modelUrl: modelUrl || null,
+      modelPreviewUrl: modelPreviewUrl || null,
       imageUrls,
     },
   });
 
   return c.redirect('/admin/products?message=created');
 });
+
+// Edit upload script
+const editUploadScript = `
+async function uploadFileToR2(file, folder) {
+  const response = await fetch('/api/admin/upload/presigned-url', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      filename: file.name,
+      contentType: file.type || 'application/octet-stream',
+      folder: folder
+    })
+  });
+
+  if (!response.ok) throw new Error('Failed to get presigned URL');
+
+  const { uploadUrl, publicUrl } = await response.json();
+
+  const uploadResponse = await fetch(uploadUrl, {
+    method: 'PUT',
+    body: file,
+    headers: { 'Content-Type': file.type || 'application/octet-stream' }
+  });
+
+  if (!uploadResponse.ok) throw new Error('Failed to upload file to R2');
+
+  return publicUrl;
+}
+
+async function handleEditFormSubmit(event) {
+  event.preventDefault();
+  const form = event.target;
+  const submitBtn = form.querySelector('button[type="submit"]');
+  const originalText = submitBtn.textContent;
+
+  try {
+    submitBtn.disabled = true;
+    submitBtn.textContent = '⏳ Se încarcă...';
+
+    // Upload new 3D model if present
+    const modelInput = form.querySelector('input[name="modelFile"]');
+    if (modelInput.files.length > 0) {
+      submitBtn.textContent = '⏳ Se încarcă modelul 3D...';
+      const url = await uploadFileToR2(modelInput.files[0], 'models');
+      form.querySelector('input[name="newModelUrl"]').value = url;
+    }
+
+    // Upload new model preview if present
+    const previewInput = form.querySelector('input[name="modelPreviewFile"]');
+    if (previewInput.files.length > 0) {
+      submitBtn.textContent = '⏳ Se încarcă preview-ul...';
+      const url = await uploadFileToR2(previewInput.files[0], 'models');
+      form.querySelector('input[name="newModelPreviewUrl"]').value = url;
+    }
+
+    // Upload new product images
+    const imagesInput = form.querySelector('input[name="images"]');
+    const newImageUrls = [];
+    for (let i = 0; i < imagesInput.files.length; i++) {
+      submitBtn.textContent = \`⏳ Se încarcă imaginea \${i + 1}/\${imagesInput.files.length}...\`;
+      const url = await uploadFileToR2(imagesInput.files[i], 'products');
+      newImageUrls.push(url);
+    }
+    form.querySelector('input[name="newImageUrls"]').value = JSON.stringify(newImageUrls);
+
+    submitBtn.textContent = '⏳ Se salvează...';
+
+    const formData = new FormData();
+    formData.append('name', form.querySelector('input[name="name"]').value);
+    formData.append('description', form.querySelector('textarea[name="description"]').value);
+    formData.append('price', form.querySelector('input[name="price"]').value);
+    formData.append('category', form.querySelector('input[name="category"]').value);
+    formData.append('sortOrder', form.querySelector('input[name="sortOrder"]').value);
+    formData.append('isActive', form.querySelector('input[name="isActive"]').checked ? 'on' : '');
+    formData.append('isFeatured', form.querySelector('input[name="isFeatured"]').checked ? 'on' : '');
+    formData.append('newModelUrl', form.querySelector('input[name="newModelUrl"]').value);
+    formData.append('newModelPreviewUrl', form.querySelector('input[name="newModelPreviewUrl"]').value);
+    formData.append('newImageUrls', form.querySelector('input[name="newImageUrls"]').value);
+
+    const response = await fetch(form.action, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (response.redirected) {
+      window.location.href = response.url;
+    } else if (response.ok) {
+      window.location.href = '/admin/products?message=updated';
+    } else {
+      throw new Error('Failed to update product');
+    }
+  } catch (error) {
+    alert('Eroare: ' + error.message);
+    submitBtn.disabled = false;
+    submitBtn.textContent = originalText;
+  }
+}
+`;
 
 // Edit product form
 app.get('/:id', async (c) => {
@@ -331,7 +519,11 @@ app.get('/:id', async (c) => {
       </div>
 
       <article>
-        <form method="post" action={`/admin/products/${id}/update`} enctype="multipart/form-data">
+        <form id="editProductForm" method="post" action={`/admin/products/${id}/update`} onsubmit="handleEditFormSubmit(event)">
+          <input type="hidden" name="newModelUrl" value="" />
+          <input type="hidden" name="newModelPreviewUrl" value="" />
+          <input type="hidden" name="newImageUrls" value="[]" />
+
           <label>
             Nume *
             <input type="text" name="name" required value={product.name} />
@@ -384,7 +576,7 @@ app.get('/:id', async (c) => {
           <label>
             {product.modelUrl ? 'Înlocuiește model 3D (opțional)' : 'Fișier model 3D (opțional)'}
             <input type="file" name="modelFile" accept=".stl,.obj,.gltf,.glb,.3mf,.step,.stp" />
-            <small>Formate acceptate: STL, OBJ, GLTF, GLB, 3MF, STEP</small>
+            <small>Formate acceptate: STL, OBJ, GLTF, GLB, 3MF, STEP (max 100MB)</small>
           </label>
 
           {product.modelPreviewUrl && (
@@ -428,11 +620,13 @@ app.get('/:id', async (c) => {
           </div>
         </form>
       </article>
+
+      <script dangerouslySetInnerHTML={{ __html: editUploadScript }} />
     </Layout>
   );
 });
 
-// Update product
+// Update product (accepts pre-uploaded URLs from direct R2 upload)
 app.post('/:id/update', async (c) => {
   const { isLoggedIn } = await checkAdminAuth(c);
   if (!isLoggedIn) {
@@ -454,41 +648,26 @@ app.post('/:id/update', async (c) => {
   const sortOrder = parseInt(formData.get('sortOrder') as string) || 0;
   const isActive = formData.get('isActive') === 'on';
   const isFeatured = formData.get('isFeatured') === 'on';
-  const modelFile = formData.get('modelFile');
-  const modelPreviewFile = formData.get('modelPreviewFile');
-  const images = formData.getAll('images');
 
-  const { uploadFile } = await import('../lib/storage.js');
-  const { isValidImageType, isValidFileSize, isValid3DModelType } = await import('../lib/utils.js');
+  // Get pre-uploaded URLs (from direct R2 upload)
+  const newModelUrl = formData.get('newModelUrl') as string || '';
+  const newModelPreviewUrl = formData.get('newModelPreviewUrl') as string || '';
+  const newImageUrlsJson = formData.get('newImageUrls') as string || '[]';
 
-  // Upload new 3D model file if provided, otherwise keep existing
-  let modelUrl = product.modelUrl;
-  if (modelFile instanceof File && modelFile.size > 0) {
-    if (isValid3DModelType(modelFile.name) && isValidFileSize(modelFile.size)) {
-      modelUrl = await uploadFile(modelFile, 'models');
-    }
-  }
-
-  // Upload new model preview image if provided, otherwise keep existing
-  let modelPreviewUrl = product.modelPreviewUrl;
-  if (modelPreviewFile instanceof File && modelPreviewFile.size > 0) {
-    if (isValidImageType(modelPreviewFile.type) && isValidFileSize(modelPreviewFile.size)) {
-      modelPreviewUrl = await uploadFile(modelPreviewFile, 'models');
-    }
-  }
+  // Use new URLs if provided, otherwise keep existing
+  const modelUrl = newModelUrl || product.modelUrl;
+  const modelPreviewUrl = newModelPreviewUrl || product.modelPreviewUrl;
 
   let imageUrls = product.imageUrls as string[];
 
   // Add new images if uploaded
-  if (images.length > 0 && images[0] instanceof File && (images[0] as File).size > 0) {
-    for (const image of images) {
-      if (!(image instanceof File)) continue;
-      if (!isValidImageType(image.type)) continue;
-      if (!isValidFileSize(image.size)) continue;
-
-      const url = await uploadFile(image, 'products');
-      imageUrls.push(url);
+  try {
+    const newImageUrls = JSON.parse(newImageUrlsJson) as string[];
+    if (newImageUrls.length > 0) {
+      imageUrls = [...imageUrls, ...newImageUrls];
     }
+  } catch {
+    // Ignore parse errors
   }
 
   await db.product.update({

@@ -1,4 +1,5 @@
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const s3 = new S3Client({
   region: 'auto',
@@ -83,4 +84,35 @@ export async function deleteFile(url: string): Promise<void> {
 export function getKeyFromUrl(url: string): string {
   const publicUrl = process.env.R2_PUBLIC_URL || '';
   return url.replace(`${publicUrl}/`, '');
+}
+
+/**
+ * Generates a presigned URL for direct upload to R2
+ * @param filename - Original filename
+ * @param contentType - MIME type of the file
+ * @param folder - The folder path (e.g., 'models', 'products')
+ * @returns Object with presigned upload URL and the final public URL
+ */
+export async function getPresignedUploadUrl(
+  filename: string,
+  contentType: string,
+  folder: string
+): Promise<{ uploadUrl: string; publicUrl: string; key: string }> {
+  const timestamp = Date.now();
+  const sanitizedName = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
+  const key = `${folder}/${timestamp}-${sanitizedName}`;
+
+  const command = new PutObjectCommand({
+    Bucket: process.env.R2_BUCKET_NAME,
+    Key: key,
+    ContentType: contentType,
+  });
+
+  const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 3600 }); // 1 hour expiry
+
+  return {
+    uploadUrl,
+    publicUrl: `${process.env.R2_PUBLIC_URL}/${key}`,
+    key,
+  };
 }
