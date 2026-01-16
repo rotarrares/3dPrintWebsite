@@ -1,14 +1,19 @@
-import { handle } from 'hono/vercel';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import app from '../src/app.js';
 
 export const runtime = 'nodejs';
 
-// Hono handler
-const honoHandler = handle(app);
+// Everything is lazy-loaded to avoid module initialization issues
+let honoHandler: any = null;
+let adminApp: any = null;
 
-// Lazy admin app - only load AdminJS when /admin is accessed
-let adminApp: import('express').Application | null = null;
+async function getHonoHandler() {
+  if (!honoHandler) {
+    const { handle } = await import('hono/vercel');
+    const { default: app } = await import('../src/app.js');
+    honoHandler = handle(app);
+  }
+  return honoHandler;
+}
 
 async function getAdminApp() {
   if (!adminApp) {
@@ -18,29 +23,30 @@ async function getAdminApp() {
   return adminApp;
 }
 
-// Combined handler
+// Main handler
 async function handler(req: VercelRequest, res: VercelResponse) {
   const url = req.url || '';
   const path = url.split('?')[0];
 
-  // Debug logging
-  console.log('[Vercel Handler] URL:', url, 'Path:', path, 'Method:', req.method);
+  console.log('[Handler] Path:', path);
 
   // Route /admin/* to Express AdminJS
   if (path === '/admin' || path.startsWith('/admin/')) {
-    console.log('[Vercel Handler] Routing to AdminJS');
+    console.log('[Handler] -> AdminJS');
     try {
       const admin = await getAdminApp();
       return admin(req, res);
     } catch (error) {
-      console.error('AdminJS error:', error);
+      console.error('[Handler] AdminJS error:', error);
       res.status(500).json({ error: 'Admin panel error', message: String(error) });
       return;
     }
   }
 
   // Route everything else to Hono
-  return honoHandler(req as any);
+  console.log('[Handler] -> Hono');
+  const hono = await getHonoHandler();
+  return hono(req);
 }
 
 export const GET = handler;
