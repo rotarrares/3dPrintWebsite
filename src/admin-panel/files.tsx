@@ -28,11 +28,6 @@ function isImageFile(filename: string): boolean {
   return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext);
 }
 
-function isModelFile(filename: string): boolean {
-  const ext = filename.toLowerCase().split('.').pop() || '';
-  return ['stl', 'obj', 'gltf', 'glb', '3mf', 'step', 'stp'].includes(ext);
-}
-
 // Files list
 app.get('/', async (c) => {
   const { isLoggedIn } = await checkAdminAuth(c);

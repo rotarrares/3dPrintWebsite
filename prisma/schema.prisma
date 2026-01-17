@@ -148,8 +148,15 @@ model Product {
   updatedAt       DateTime         @updatedAt
   variants        ProductVariant[]
 
+  // SEO & Metadata
+  slug            String?          @unique // URL-friendly identifier
+  metaTitle       String?          // Custom page title for SEO
+  metaDescription String?          // Meta description for search engines
+  metaKeywords    String?          // Keywords for SEO (comma-separated)
+
   @@index([isActive, sortOrder])
   @@index([categoryId])
+  @@index([slug])
 }
 
 model ProductVariant {
