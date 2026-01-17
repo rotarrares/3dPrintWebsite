@@ -174,7 +174,7 @@ app.get('/:id', async (c) => {
 
   const order = await db.order.findUnique({
     where: { id },
-    include: { variants: true, review: true },
+    include: { variants: true, review: true, invoice: true },
   });
 
   if (!order) {
@@ -205,6 +205,18 @@ app.get('/:id', async (c) => {
       )}
       {message === 'email_sent' && (
         <Alert type="success" message="Emailul a fost trimis cu succes!" />
+      )}
+      {message === 'invoice_generated' && (
+        <Alert type="success" message="Factura a fost generată cu succes!" />
+      )}
+      {message === 'invoice_regenerated' && (
+        <Alert type="success" message="Factura a fost regenerată cu succes!" />
+      )}
+      {message === 'invoice_sent' && (
+        <Alert type="success" message="Factura a fost trimisă prin email!" />
+      )}
+      {message === 'invoice_error' && (
+        <Alert type="error" message="A apărut o eroare la procesarea facturii." />
       )}
 
       <div class="order-detail">
@@ -504,6 +516,81 @@ app.get('/:id', async (c) => {
               )}
             </section>
           )}
+
+          {/* Invoice Section */}
+          <section class="detail-section">
+            <h3>📄 Factură</h3>
+            {order.invoice ? (
+              <>
+                <div class="detail-row">
+                  <span class="detail-label">Număr</span>
+                  <strong>{order.invoice.invoiceNumber}</strong>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Data emiterii</span>
+                  <span>{new Date(order.invoice.issueDate).toLocaleDateString('ro-RO')}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Total</span>
+                  <span>{formatPrice(order.invoice.total)}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Status</span>
+                  <span>
+                    {order.invoice.status === 'SENT' ? (
+                      <span style={{ color: 'var(--pico-primary)' }}>✓ Trimisă</span>
+                    ) : order.invoice.status === 'GENERATED' ? (
+                      <span style={{ color: 'var(--pico-color)' }}>Generată</span>
+                    ) : (
+                      <span style={{ color: 'var(--pico-muted-color)' }}>{order.invoice.status}</span>
+                    )}
+                  </span>
+                </div>
+                {order.invoice.sentAt && (
+                  <div class="detail-row">
+                    <span class="detail-label">Trimisă la</span>
+                    <span>{new Date(order.invoice.sentAt).toLocaleString('ro-RO')}</span>
+                  </div>
+                )}
+                <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {order.invoice.pdfUrl && (
+                    <a href={order.invoice.pdfUrl} target="_blank" role="button" class="outline" style={{ textAlign: 'center' }}>
+                      📥 Descarcă PDF
+                    </a>
+                  )}
+                  <form method="post" action={`/admin/orders/${order.id}/invoice/regenerate`} style={{ margin: 0 }}>
+                    <button type="submit" class="outline secondary" style={{ width: '100%' }}>
+                      🔄 Regenerează PDF
+                    </button>
+                  </form>
+                  {order.invoice.status !== 'SENT' && (
+                    <form method="post" action={`/admin/orders/${order.id}/invoice/send`} style={{ margin: 0 }}>
+                      <button type="submit" class="outline" style={{ width: '100%' }}>
+                        📧 Trimite factura
+                      </button>
+                    </form>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <p style={{ color: 'var(--pico-muted-color)', marginBottom: '1rem' }}>
+                  Nu există factură pentru această comandă.
+                </p>
+                {(order.status === 'SHIPPED' || order.status === 'DELIVERED') && order.price ? (
+                  <form method="post" action={`/admin/orders/${order.id}/invoice/generate`}>
+                    <button type="submit" class="outline" style={{ width: '100%' }}>
+                      📄 Generează factură
+                    </button>
+                  </form>
+                ) : (
+                  <p style={{ fontSize: '0.875rem', color: 'var(--pico-muted-color)' }}>
+                    Factura se generează automat la expediere.
+                  </p>
+                )}
+              </>
+            )}
+          </section>
         </div>
       </div>
     </Layout>
@@ -636,6 +723,83 @@ app.post('/:id/send-email', async (c) => {
   } catch (e) {
     console.error('Failed to send email:', e);
     return c.redirect(`/admin/orders/${id}?message=email_error`);
+  }
+});
+
+// Generate invoice
+app.post('/:id/invoice/generate', async (c) => {
+  const { isLoggedIn } = await checkAdminAuth(c);
+  if (!isLoggedIn) {
+    return c.redirect('/admin/login');
+  }
+
+  const id = c.req.param('id');
+
+  try {
+    const { createInvoice } = await import('../lib/invoice.js');
+    await createInvoice(id);
+    return c.redirect(`/admin/orders/${id}?message=invoice_generated`);
+  } catch (e) {
+    console.error('Failed to generate invoice:', e);
+    return c.redirect(`/admin/orders/${id}?message=invoice_error`);
+  }
+});
+
+// Regenerate invoice
+app.post('/:id/invoice/regenerate', async (c) => {
+  const { isLoggedIn } = await checkAdminAuth(c);
+  if (!isLoggedIn) {
+    return c.redirect('/admin/login');
+  }
+
+  const id = c.req.param('id');
+
+  const order = await db.order.findUnique({
+    where: { id },
+    include: { invoice: true },
+  });
+
+  if (!order || !order.invoice) {
+    return c.redirect(`/admin/orders/${id}?message=invoice_error`);
+  }
+
+  try {
+    const { regenerateInvoice } = await import('../lib/invoice.js');
+    await regenerateInvoice(order.invoice.id);
+    return c.redirect(`/admin/orders/${id}?message=invoice_regenerated`);
+  } catch (e) {
+    console.error('Failed to regenerate invoice:', e);
+    return c.redirect(`/admin/orders/${id}?message=invoice_error`);
+  }
+});
+
+// Send invoice email
+app.post('/:id/invoice/send', async (c) => {
+  const { isLoggedIn } = await checkAdminAuth(c);
+  if (!isLoggedIn) {
+    return c.redirect('/admin/login');
+  }
+
+  const id = c.req.param('id');
+
+  const order = await db.order.findUnique({
+    where: { id },
+    include: { invoice: true },
+  });
+
+  if (!order || !order.invoice) {
+    return c.redirect(`/admin/orders/${id}?message=invoice_error`);
+  }
+
+  try {
+    const { sendInvoiceEmail } = await import('../lib/email.js');
+    const { markInvoiceAsSent } = await import('../lib/invoice.js');
+    await sendInvoiceEmail(order, order.invoice);
+    await markInvoiceAsSent(order.invoice.id);
+    return c.redirect(`/admin/orders/${id}?message=invoice_sent`);
+  } catch (e) {
+    console.error('Failed to send invoice:', e);
+    return c.redirect(`/admin/orders/${id}?message=invoice_error`);
   }
 });
 

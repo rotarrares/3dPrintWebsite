@@ -285,6 +285,11 @@ export const Layout: FC<LayoutProps> = ({ title, children, isLoggedIn = false, c
                     </a>
                   </li>
                   <li>
+                    <a href="/admin/invoices" class={currentPath.startsWith('/admin/invoices') ? 'active' : ''}>
+                      📄 Facturi
+                    </a>
+                  </li>
+                  <li>
                     <a href="/admin/products" class={currentPath.startsWith('/admin/products') ? 'active' : ''}>
                       🏷️ Produse
                     </a>
@@ -302,6 +307,11 @@ export const Layout: FC<LayoutProps> = ({ title, children, isLoggedIn = false, c
                   <li>
                     <a href="/admin/files" class={currentPath.startsWith('/admin/files') ? 'active' : ''}>
                       📁 Fișiere R2
+                    </a>
+                  </li>
+                  <li>
+                    <a href="/admin/settings" class={currentPath.startsWith('/admin/settings') ? 'active' : ''}>
+                      Setari Companie
                     </a>
                   </li>
                 </ul>

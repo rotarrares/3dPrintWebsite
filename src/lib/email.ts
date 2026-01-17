@@ -1,5 +1,5 @@
 import { Resend } from 'resend';
-import type { Order, ModelVariant } from '@prisma/client';
+import type { Order, ModelVariant, Invoice } from '@prisma/client';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -294,5 +294,123 @@ export async function sendContactNotification(data: {
       </body>
       </html>
     `,
+  });
+}
+
+/**
+ * Sends shipping notification email with invoice PDF attached
+ */
+export async function sendShippingEmailWithInvoice(
+  order: Order,
+  invoice: Invoice
+): Promise<void> {
+  if (!invoice.pdfUrl) {
+    throw new Error('Invoice PDF URL is required');
+  }
+
+  // Fetch PDF from R2
+  const pdfResponse = await fetch(invoice.pdfUrl);
+  if (!pdfResponse.ok) {
+    throw new Error(`Failed to fetch invoice PDF: ${pdfResponse.status}`);
+  }
+  const pdfBuffer = await pdfResponse.arrayBuffer();
+  const pdfBase64 = Buffer.from(pdfBuffer).toString('base64');
+
+  await resend.emails.send({
+    from: FROM_EMAIL,
+    to: order.customerEmail,
+    subject: `Comanda ta a fost expediata! - ${order.orderNumber}`,
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Comanda expediata</title>
+      </head>
+      <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h1 style="color: #2563eb;">Comanda ta este pe drum!</h1>
+        <p>Draga ${order.customerName},</p>
+        <p>Comanda ta <strong>${order.orderNumber}</strong> a fost expediata si este pe drum catre tine.</p>
+
+        ${order.trackingNumber ? `
+        <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <h3 style="margin: 0 0 10px 0; color: #374151;">Tracking:</h3>
+          <p style="margin: 5px 0; font-size: 18px;"><strong>${order.trackingNumber}</strong></p>
+        </div>
+        ` : ''}
+
+        <p>Vei primi coletul in aproximativ 1-3 zile lucratoare.</p>
+
+        <div style="background: #e8f4fd; padding: 15px; border-radius: 8px; margin: 20px 0;">
+          <p style="margin: 0;"><strong>Factura ${invoice.invoiceNumber}</strong> este atasata la acest email.</p>
+        </div>
+
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+        <p style="color: #6b7280; font-size: 14px;">Cu drag,<br>Echipa Print3D</p>
+      </body>
+      </html>
+    `,
+    attachments: [
+      {
+        filename: `Factura-${invoice.invoiceNumber}.pdf`,
+        content: pdfBase64,
+      },
+    ],
+  });
+}
+
+/**
+ * Sends invoice email separately (for manual resend)
+ */
+export async function sendInvoiceEmail(
+  order: Order,
+  invoice: Invoice
+): Promise<void> {
+  if (!invoice.pdfUrl) {
+    throw new Error('Invoice PDF URL is required');
+  }
+
+  // Fetch PDF from R2
+  const pdfResponse = await fetch(invoice.pdfUrl);
+  if (!pdfResponse.ok) {
+    throw new Error(`Failed to fetch invoice PDF: ${pdfResponse.status}`);
+  }
+  const pdfBuffer = await pdfResponse.arrayBuffer();
+  const pdfBase64 = Buffer.from(pdfBuffer).toString('base64');
+
+  await resend.emails.send({
+    from: FROM_EMAIL,
+    to: order.customerEmail,
+    subject: `Factura ${invoice.invoiceNumber} - ${order.orderNumber}`,
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Factura</title>
+      </head>
+      <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h1 style="color: #2563eb;">Factura pentru comanda ta</h1>
+        <p>Draga ${order.customerName},</p>
+        <p>Iti trimitem factura pentru comanda <strong>${order.orderNumber}</strong>.</p>
+
+        <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <p style="margin: 5px 0;"><strong>Numar factura:</strong> ${invoice.invoiceNumber}</p>
+          <p style="margin: 5px 0;"><strong>Total:</strong> ${invoice.total} RON</p>
+        </div>
+
+        <p>Factura este atasata la acest email in format PDF.</p>
+
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+        <p style="color: #6b7280; font-size: 14px;">Cu drag,<br>Echipa Print3D</p>
+      </body>
+      </html>
+    `,
+    attachments: [
+      {
+        filename: `Factura-${invoice.invoiceNumber}.pdf`,
+        content: pdfBase64,
+      },
+    ],
   });
 }

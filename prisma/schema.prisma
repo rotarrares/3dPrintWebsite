@@ -56,6 +56,7 @@ model Order {
   // Relations
   variants          ModelVariant[]
   review            Review?
+  invoice           Invoice?
 
   @@index([status])
   @@index([customerEmail])
@@ -176,4 +177,55 @@ model ProductVariant {
 
   @@index([productId])
   @@index([isActive])
+}
+
+model Invoice {
+  id            String        @id @default(cuid())
+  invoiceNumber String        @unique
+  orderId       String        @unique
+  order         Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  issueDate     DateTime      @default(now())
+  subtotal      Decimal       @db.Decimal(10, 2)
+  shippingCost  Decimal       @db.Decimal(10, 2)
+  total         Decimal       @db.Decimal(10, 2)
+  pdfUrl        String?
+  status        InvoiceStatus @default(DRAFT)
+  sentAt        DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([invoiceNumber])
+  @@index([issueDate])
+}
+
+model InvoiceCounter {
+  id        String   @id @default("default")
+  year      Int
+  counter   Int      @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+enum InvoiceStatus {
+  DRAFT
+  GENERATED
+  SENT
+  CANCELLED
+}
+
+model CompanySettings {
+  id            String   @id @default("default")
+  name          String   @default("Print3D S.R.L.")
+  cui           String   @default("RO12345678")
+  regCom        String   @default("J12/1234/2024")
+  address       String   @default("Str. Exemplu nr. 10")
+  city          String   @default("Cluj-Napoca")
+  county        String   @default("Cluj")
+  postalCode    String   @default("400001")
+  country       String   @default("Romania")
+  bankName      String   @default("Banca Transilvania")
+  iban          String   @default("RO49AAAA1B31007593840000")
+  capitalSocial String   @default("200 RON")
+  email         String   @default("contact@print3d.ro")
+  phone         String   @default("+40 123 456 789")
+  updatedAt     DateTime @updatedAt
 }

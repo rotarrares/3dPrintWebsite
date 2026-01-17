@@ -8,6 +8,8 @@ import {
   ProductListResponseSchema,
   ProductResponseSchema,
   CategoriesResponseSchema,
+  SearchQuerySchema,
+  SearchResponseSchema,
 } from './products.schemas.js';
 
 const app = new OpenAPIHono();
@@ -146,6 +148,88 @@ app.openapi(listCategoriesRoute, async (c) => {
       description: cat.description,
       imageUrl: cat.imageUrl,
     })),
+  }, 200);
+});
+
+// GET /api/products/search - Lightweight search for autocomplete
+const searchProductsRoute = createRoute({
+  method: 'get',
+  path: '/search',
+  tags: ['Products'],
+  summary: 'Căutare produse (autocomplete)',
+  description: 'Endpoint optimizat pentru search bar - returnează date minime pentru sugestii.',
+  request: {
+    query: SearchQuerySchema,
+  },
+  responses: {
+    200: {
+      description: 'Rezultate căutare',
+      content: {
+        'application/json': {
+          schema: SearchResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+app.openapi(searchProductsRoute, async (c) => {
+  const { q, category, featured, sortBy, sortOrder, limit } = c.req.valid('query');
+
+  const where: any = {
+    isActive: true,
+    OR: [
+      { name: { contains: q, mode: 'insensitive' } },
+      { description: { contains: q, mode: 'insensitive' } },
+    ],
+    ...(category && { categoryId: category }),
+    ...(featured && { isFeatured: true }),
+  };
+
+  // Build orderBy based on sortBy
+  let orderBy: any;
+  switch (sortBy) {
+    case 'price':
+      orderBy = { basePrice: sortOrder };
+      break;
+    case 'name':
+      orderBy = { name: sortOrder };
+      break;
+    case 'createdAt':
+      orderBy = { createdAt: sortOrder };
+      break;
+    case 'relevance':
+    default:
+      // For relevance, prioritize name matches then by sortOrder
+      orderBy = [{ sortOrder: 'asc' }, { createdAt: 'desc' }];
+      break;
+  }
+
+  const [products, total] = await Promise.all([
+    db.product.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        imageUrls: true,
+        basePrice: true,
+        slug: true,
+      },
+      orderBy,
+      take: limit,
+    }),
+    db.product.count({ where }),
+  ]);
+
+  return c.json({
+    results: products.map(p => ({
+      id: p.id,
+      name: p.name,
+      imageUrl: (p.imageUrls as string[])[0] || null,
+      price: formatPrice(p.basePrice) as string,
+      slug: p.slug,
+    })),
+    total,
   }, 200);
 });
 

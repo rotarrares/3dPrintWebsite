@@ -4,7 +4,8 @@ import { db } from '../../lib/db.js';
 import { adminAuth } from '../../middleware/auth.js';
 import { formatPrice } from '../../lib/utils.js';
 import { uploadFile, deleteFile } from '../../lib/storage.js';
-import { sendApprovalEmail, sendShippingEmail, sendReviewRequestEmail } from '../../lib/email.js';
+import { sendApprovalEmail, sendShippingEmail, sendReviewRequestEmail, sendShippingEmailWithInvoice, sendInvoiceEmail } from '../../lib/email.js';
+import { createInvoice, regenerateInvoice, markInvoiceAsSent } from '../../lib/invoice.js';
 import { isValidImageType, isValidFileSize } from '../../lib/utils.js';
 import { triggerOrderStatusUpdate } from '../../workers/orderStatusWorker.js';
 import {
@@ -218,6 +219,15 @@ app.openapi(updateOrderRoute, async (c) => {
 
   if (data.status === 'SHIPPED' && existingOrder.status !== 'SHIPPED') {
     updateData.shippedAt = new Date();
+
+    // Auto-generate invoice when order is shipped
+    try {
+      const invoice = await createInvoice(id);
+      console.log(`[Invoice] Auto-generated ${invoice.invoiceNumber} for order ${existingOrder.orderNumber}`);
+    } catch (error) {
+      console.error(`[Invoice] Failed to auto-generate for order ${existingOrder.orderNumber}:`, error);
+      // Don't fail the order update if invoice generation fails
+    }
   }
 
   if (data.status === 'DELIVERED' && existingOrder.status !== 'DELIVERED') {
@@ -559,7 +569,10 @@ const sendShippingEmailRoute = createRoute({
 app.openapi(sendShippingEmailRoute, async (c) => {
   const { id } = c.req.valid('param');
 
-  const order = await db.order.findUnique({ where: { id } });
+  const order = await db.order.findUnique({
+    where: { id },
+    include: { invoice: true },
+  });
 
   if (!order) {
     return c.json({ error: 'not_found', message: 'Comanda nu există' }, 404);
@@ -573,10 +586,15 @@ app.openapi(sendShippingEmailRoute, async (c) => {
   }
 
   try {
-    await sendShippingEmail(order);
-
-    // Optionally send review request after a delay (or from a separate trigger)
-    // For now, just send shipping email
+    // If invoice exists and has PDF, send shipping email with invoice
+    if (order.invoice && order.invoice.pdfUrl) {
+      await sendShippingEmailWithInvoice(order, order.invoice);
+      // Mark invoice as sent
+      await markInvoiceAsSent(order.invoice.id);
+    } else {
+      // Fallback to regular shipping email
+      await sendShippingEmail(order);
+    }
 
     return c.json({ success: true, message: 'Email trimis' }, 200);
   } catch (e) {
@@ -656,6 +674,248 @@ app.openapi(sendReviewEmailRoute, async (c) => {
     return c.json({ success: true, message: 'Email trimis' }, 200);
   } catch (e) {
     console.error('Failed to send review email:', e);
+    return c.json({
+      error: 'email_failed',
+      message: 'Nu s-a putut trimite emailul',
+    }, 500);
+  }
+});
+
+// POST /api/admin/orders/:id/invoice/generate - Generate invoice
+const generateInvoiceRoute = createRoute({
+  method: 'post',
+  path: '/{id}/invoice/generate',
+  tags: ['Admin Orders'],
+  summary: 'Generează factură',
+  description: 'Generează factura PDF pentru o comandă.',
+  security: [{ Bearer: [] }],
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Factură generată',
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.boolean(),
+            invoiceNumber: z.string(),
+            pdfUrl: z.string(),
+          }),
+        },
+      },
+    },
+    400: {
+      description: 'Nu se poate genera factura',
+      content: {
+        'application/json': {
+          schema: ErrorSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Comanda nu există',
+      content: {
+        'application/json': {
+          schema: ErrorSchema,
+        },
+      },
+    },
+    500: {
+      description: 'Eroare la generare',
+      content: {
+        'application/json': {
+          schema: ErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+app.openapi(generateInvoiceRoute, async (c) => {
+  const { id } = c.req.valid('param');
+
+  const order = await db.order.findUnique({
+    where: { id },
+    include: { invoice: true },
+  });
+
+  if (!order) {
+    return c.json({ error: 'not_found', message: 'Comanda nu există' }, 404);
+  }
+
+  if (order.invoice) {
+    return c.json({
+      error: 'invoice_exists',
+      message: 'Factura există deja pentru această comandă',
+    }, 400);
+  }
+
+  if (!order.price) {
+    return c.json({
+      error: 'no_price',
+      message: 'Comanda nu are preț setat',
+    }, 400);
+  }
+
+  try {
+    const invoice = await createInvoice(id);
+    return c.json({
+      success: true,
+      invoiceNumber: invoice.invoiceNumber,
+      pdfUrl: invoice.pdfUrl || '',
+    }, 200);
+  } catch (e) {
+    console.error('Failed to generate invoice:', e);
+    return c.json({
+      error: 'generation_failed',
+      message: 'Nu s-a putut genera factura',
+    }, 500);
+  }
+});
+
+// POST /api/admin/orders/:id/invoice/regenerate - Regenerate invoice
+const regenerateInvoiceRoute = createRoute({
+  method: 'post',
+  path: '/{id}/invoice/regenerate',
+  tags: ['Admin Orders'],
+  summary: 'Regenerează factură',
+  description: 'Regenerează PDF-ul facturii (păstrează același număr).',
+  security: [{ Bearer: [] }],
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Factură regenerată',
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.boolean(),
+            invoiceNumber: z.string(),
+            pdfUrl: z.string(),
+          }),
+        },
+      },
+    },
+    404: {
+      description: 'Factura nu există',
+      content: {
+        'application/json': {
+          schema: ErrorSchema,
+        },
+      },
+    },
+    500: {
+      description: 'Eroare la regenerare',
+      content: {
+        'application/json': {
+          schema: ErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+app.openapi(regenerateInvoiceRoute, async (c) => {
+  const { id } = c.req.valid('param');
+
+  const order = await db.order.findUnique({
+    where: { id },
+    include: { invoice: true },
+  });
+
+  if (!order) {
+    return c.json({ error: 'not_found', message: 'Comanda nu există' }, 404);
+  }
+
+  if (!order.invoice) {
+    return c.json({
+      error: 'no_invoice',
+      message: 'Nu există factură pentru această comandă',
+    }, 404);
+  }
+
+  try {
+    const invoice = await regenerateInvoice(order.invoice.id);
+    return c.json({
+      success: true,
+      invoiceNumber: invoice.invoiceNumber,
+      pdfUrl: invoice.pdfUrl || '',
+    }, 200);
+  } catch (e) {
+    console.error('Failed to regenerate invoice:', e);
+    return c.json({
+      error: 'regeneration_failed',
+      message: 'Nu s-a putut regenera factura',
+    }, 500);
+  }
+});
+
+// POST /api/admin/orders/:id/invoice/send - Send invoice email
+const sendInvoiceEmailRoute = createRoute({
+  method: 'post',
+  path: '/{id}/invoice/send',
+  tags: ['Admin Orders'],
+  summary: 'Trimite factură email',
+  description: 'Trimite factura PDF prin email către client.',
+  security: [{ Bearer: [] }],
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Email trimis',
+      content: {
+        'application/json': {
+          schema: SuccessSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Factura nu există',
+      content: {
+        'application/json': {
+          schema: ErrorSchema,
+        },
+      },
+    },
+    500: {
+      description: 'Eroare la trimiterea emailului',
+      content: {
+        'application/json': {
+          schema: ErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+app.openapi(sendInvoiceEmailRoute, async (c) => {
+  const { id } = c.req.valid('param');
+
+  const order = await db.order.findUnique({
+    where: { id },
+    include: { invoice: true },
+  });
+
+  if (!order) {
+    return c.json({ error: 'not_found', message: 'Comanda nu există' }, 404);
+  }
+
+  if (!order.invoice || !order.invoice.pdfUrl) {
+    return c.json({
+      error: 'no_invoice',
+      message: 'Nu există factură pentru această comandă',
+    }, 404);
+  }
+
+  try {
+    await sendInvoiceEmail(order, order.invoice);
+    await markInvoiceAsSent(order.invoice.id);
+    return c.json({ success: true, message: 'Email trimis' }, 200);
+  } catch (e) {
+    console.error('Failed to send invoice email:', e);
     return c.json({
       error: 'email_failed',
       message: 'Nu s-a putut trimite emailul',

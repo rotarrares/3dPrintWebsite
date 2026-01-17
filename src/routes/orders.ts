@@ -15,6 +15,7 @@ import {
   OrderIdParamSchema,
   SubscriptionSchema,
   SubscriptionResponseSchema,
+  DeliveryEstimationSchema,
   ErrorSchema,
 } from './orders.schemas.js';
 
@@ -513,6 +514,48 @@ app.openapi(subscriptionRoute, async (c) => {
     : 'Te-ai dezabonat de la actualizări pentru această comandă';
 
   return c.json({ subscribeToUpdates: subscribe, message }, 200);
+});
+
+// GET /api/orders/delivery-estimation - Get delivery time estimation
+const HOURS_PER_ORDER = 5;
+const WORKING_HOURS_PER_DAY = 8;
+
+const deliveryEstimationRoute = createRoute({
+  method: 'get',
+  path: '/delivery-estimation',
+  tags: ['Orders'],
+  summary: 'Estimare timp livrare',
+  description: 'Returnează o estimare a timpului de livrare bazată pe numărul de comenzi active în procesare. Fiecare comandă necesită aproximativ 5 ore de procesare.',
+  responses: {
+    200: {
+      description: 'Estimare timp livrare',
+      content: {
+        'application/json': {
+          schema: DeliveryEstimationSchema,
+        },
+      },
+    },
+  },
+});
+
+app.openapi(deliveryEstimationRoute, async (c) => {
+  // Count all orders that are not CANCELLED or DELIVERED
+  const activeOrders = await db.order.count({
+    where: {
+      status: {
+        notIn: ['CANCELLED', 'DELIVERED'],
+      },
+    },
+  });
+
+  const estimatedHours = activeOrders * HOURS_PER_ORDER;
+  const estimatedDays = Math.round((estimatedHours / WORKING_HOURS_PER_DAY) * 10) / 10;
+
+  return c.json({
+    activeOrders,
+    estimatedHours,
+    estimatedDays,
+  }, 200);
 });
 
 export default app;

@@ -105,4 +105,11 @@ export const SubscriptionResponseSchema = z.object({
   message: z.string(),
 }).openapi('SubscriptionResponse');
 
+// Delivery estimation response
+export const DeliveryEstimationSchema = z.object({
+  activeOrders: z.number().openapi({ example: 5, description: 'Numărul total de comenzi active în procesare' }),
+  estimatedHours: z.number().openapi({ example: 25, description: 'Timp estimat în ore pentru procesarea tuturor comenzilor active' }),
+  estimatedDays: z.number().openapi({ example: 3.1, description: 'Timp estimat în zile (la 8 ore de lucru pe zi)' }),
+}).openapi('DeliveryEstimationResponse');
+
 export { ErrorSchema };
