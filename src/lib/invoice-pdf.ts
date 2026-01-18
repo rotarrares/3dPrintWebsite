@@ -53,8 +53,8 @@ export async function createInvoicePdf(data: InvoiceData): Promise<Buffer> {
       // Draw the invoice
       drawHeader(doc, data);
       drawCompanyAndCustomer(doc, data);
-      drawLineItems(doc, data);
-      drawTotals(doc, data);
+      const tableEndY = drawLineItems(doc, data);
+      drawTotals(doc, data, tableEndY);
       drawFooter(doc, data);
 
       doc.end();
@@ -113,54 +113,54 @@ function drawCompanyAndCustomer(doc: PDFKit.PDFDocument, data: InvoiceData): voi
   doc.font('Helvetica').fontSize(10);
 
   let y = startY + 18;
-  doc.text(data.company.name, leftCol, y);
+  doc.text(normalizeRomanianText(data.company.name), leftCol, y);
   y += 14;
   doc.text(`CUI: ${data.company.cui}`, leftCol, y);
   y += 14;
   doc.text(`Reg. Com.: ${data.company.regCom}`, leftCol, y);
   y += 14;
-  doc.text(data.company.address, leftCol, y);
+  doc.text(normalizeRomanianText(data.company.address), leftCol, y);
   y += 14;
-  doc.text(`${data.company.city}, ${data.company.county}`, leftCol, y);
+  doc.text(normalizeRomanianText(`${data.company.city}, ${data.company.county}`), leftCol, y);
   y += 14;
   doc.text(data.company.postalCode, leftCol, y);
   y += 18;
   doc.text(`IBAN: ${data.company.iban}`, leftCol, y);
   y += 14;
-  doc.text(data.company.bankName, leftCol, y);
+  doc.text(normalizeRomanianText(data.company.bankName), leftCol, y);
 
   // Cumparator (Buyer)
   doc.fontSize(11).font('Helvetica-Bold').text('CUMPARATOR:', rightCol, startY);
   doc.font('Helvetica').fontSize(10);
 
   y = startY + 18;
-  doc.text(data.customer.name, rightCol, y, { width: colWidth });
+  doc.text(normalizeRomanianText(data.customer.name), rightCol, y, { width: colWidth });
   y += 14;
   if (data.customer.address) {
-    doc.text(data.customer.address, rightCol, y, { width: colWidth });
+    doc.text(normalizeRomanianText(data.customer.address), rightCol, y, { width: colWidth });
     y += 14;
   }
-  doc.text(`${data.customer.city}, ${data.customer.county}`, rightCol, y, { width: colWidth });
+  doc.text(normalizeRomanianText(`${data.customer.city}, ${data.customer.county}`), rightCol, y, { width: colWidth });
   y += 14;
   if (data.customer.postalCode) {
     doc.text(data.customer.postalCode, rightCol, y, { width: colWidth });
     y += 14;
   }
-  doc.text(data.customer.country, rightCol, y, { width: colWidth });
+  doc.text(normalizeRomanianText(data.customer.country), rightCol, y, { width: colWidth });
 
   // Separator line
   doc.moveTo(50, 320).lineTo(545, 320).stroke();
 }
 
-function drawLineItems(doc: PDFKit.PDFDocument, data: InvoiceData): void {
+function drawLineItems(doc: PDFKit.PDFDocument, data: InvoiceData): number {
   const startY = 335;
   const tableLeft = 50;
   const colWidths = {
-    nr: 30,
-    description: 280,
-    qty: 50,
-    price: 80,
-    total: 80,
+    nr: 25,
+    description: 240,
+    qty: 45,
+    price: 85,
+    total: 85,
   };
 
   // Table header
@@ -188,7 +188,7 @@ function drawLineItems(doc: PDFKit.PDFDocument, data: InvoiceData): void {
     x = tableLeft;
     doc.text(String(index + 1), x, y, { width: colWidths.nr, align: 'center' });
     x += colWidths.nr;
-    doc.text(item.description, x, y, { width: colWidths.description });
+    doc.text(normalizeRomanianText(item.description), x, y, { width: colWidths.description });
     x += colWidths.description;
     doc.text(String(item.quantity), x, y, { width: colWidths.qty, align: 'center' });
     x += colWidths.qty;
@@ -200,39 +200,43 @@ function drawLineItems(doc: PDFKit.PDFDocument, data: InvoiceData): void {
 
   // Table bottom line
   doc.moveTo(tableLeft, y + 5).lineTo(545, y + 5).stroke();
+
+  return y + 15;
 }
 
-function drawTotals(doc: PDFKit.PDFDocument, data: InvoiceData): void {
-  const startY = 450;
-  const rightAlign = 465;
-  const valueAlign = 545;
+function drawTotals(doc: PDFKit.PDFDocument, data: InvoiceData, tableEndY: number): void {
+  const startY = tableEndY + 20;
+  const labelX = 380;
+  const labelWidth = 80;
+  const valueX = 465;
+  const valueWidth = 80;
 
   doc.fontSize(10).font('Helvetica');
 
   // Subtotal
-  doc.text('Subtotal:', rightAlign, startY, { width: 80, align: 'right' });
-  doc.text(formatPrice(data.totals.subtotal), valueAlign - 80, startY, {
-    width: 80,
+  doc.text('Subtotal:', labelX, startY, { width: labelWidth, align: 'right' });
+  doc.text(formatPrice(data.totals.subtotal), valueX, startY, {
+    width: valueWidth,
     align: 'right',
   });
 
   // Shipping
   if (data.totals.shipping > 0) {
-    doc.text('Transport:', rightAlign, startY + 18, { width: 80, align: 'right' });
-    doc.text(formatPrice(data.totals.shipping), valueAlign - 80, startY + 18, {
-      width: 80,
+    doc.text('Transport:', labelX, startY + 18, { width: labelWidth, align: 'right' });
+    doc.text(formatPrice(data.totals.shipping), valueX, startY + 18, {
+      width: valueWidth,
       align: 'right',
     });
   }
 
   // Total line
-  doc.moveTo(380, startY + 40).lineTo(545, startY + 40).stroke();
+  doc.moveTo(labelX, startY + 40).lineTo(545, startY + 40).stroke();
 
   // Total
   doc.fontSize(12).font('Helvetica-Bold');
-  doc.text('TOTAL:', rightAlign, startY + 50, { width: 80, align: 'right' });
-  doc.text(formatPrice(data.totals.total), valueAlign - 80, startY + 50, {
-    width: 80,
+  doc.text('TOTAL:', labelX, startY + 50, { width: labelWidth, align: 'right' });
+  doc.text(formatPrice(data.totals.total), valueX, startY + 50, {
+    width: valueWidth,
     align: 'right',
   });
 }
@@ -243,7 +247,7 @@ function drawFooter(doc: PDFKit.PDFDocument, data: InvoiceData): void {
   doc.fontSize(9).font('Helvetica').fillColor('#666666');
 
   // Company additional info
-  doc.text(`Capital social: ${data.company.capitalSocial}`, 50, footerY);
+  doc.text(normalizeRomanianText(`Capital social: ${data.company.capitalSocial}`), 50, footerY);
 
   // Legal text
   doc.text(
@@ -259,4 +263,18 @@ function drawFooter(doc: PDFKit.PDFDocument, data: InvoiceData): void {
 
 function formatPrice(amount: number): string {
   return `${amount.toFixed(2)} RON`;
+}
+
+function normalizeRomanianText(text: string): string {
+  return text
+    .replace(/ă/g, 'a')
+    .replace(/Ă/g, 'A')
+    .replace(/â/g, 'a')
+    .replace(/Â/g, 'A')
+    .replace(/î/g, 'i')
+    .replace(/Î/g, 'I')
+    .replace(/ș/g, 's')
+    .replace(/Ș/g, 'S')
+    .replace(/ț/g, 't')
+    .replace(/Ț/g, 'T');
 }
