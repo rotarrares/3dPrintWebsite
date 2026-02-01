@@ -2,7 +2,8 @@ import { OpenAPIHono, createRoute } from '@hono/zod-openapi';
 import { z } from '@hono/zod-openapi';
 import { db } from '../../lib/db.js';
 import { adminAuth } from '../../middleware/auth.js';
-import { deleteFile } from '../../lib/storage.js';
+import { deleteFile, uploadFile } from '../../lib/storage.js';
+import { isValidImageType, isValidFileSize, MAX_FILE_SIZE } from '../../lib/utils.js';
 import {
   CreateCategorySchema,
   UpdateCategorySchema,
@@ -303,6 +304,138 @@ app.openapi(deleteCategoryRoute, async (c) => {
   await db.productCategory.delete({ where: { id } });
 
   return c.json({ success: true, message: 'Categorie ștearsă' }, 200);
+});
+
+// POST /api/admin/categories/:id/image - Upload category image
+const uploadCategoryImageRoute = createRoute({
+  method: 'post',
+  path: '/{id}/image',
+  tags: ['Admin Categories'],
+  summary: 'Încarcă imagine categorie',
+  description: 'Încarcă o imagine pentru o categorie și o salvează în R2.',
+  security: [{ Bearer: [] }],
+  request: {
+    params: IdParamSchema,
+    body: {
+      content: {
+        'multipart/form-data': {
+          schema: z.object({
+            file: z.any().openapi({
+              type: 'string',
+              format: 'binary',
+              description: 'Fișier imagine (jpg, png, webp, max 10MB)',
+            }),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Imagine încărcată cu succes',
+      content: {
+        'application/json': {
+          schema: z.object({
+            imageUrl: z.string().url(),
+            message: z.string(),
+          }),
+        },
+      },
+    },
+    400: {
+      description: 'Fișier invalid',
+      content: {
+        'application/json': {
+          schema: ErrorSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Categoria nu există',
+      content: {
+        'application/json': {
+          schema: ErrorSchema,
+        },
+      },
+    },
+    500: {
+      description: 'Eroare la încărcare',
+      content: {
+        'application/json': {
+          schema: ErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+app.openapi(uploadCategoryImageRoute, async (c) => {
+  const { id } = c.req.valid('param');
+  const formData = await c.req.formData();
+  const file = formData.get('file');
+
+  if (!file || !(file instanceof File)) {
+    return c.json({
+      error: 'no_file',
+      message: 'Nu a fost trimis niciun fișier',
+    }, 400);
+  }
+
+  // Validate file type
+  if (!isValidImageType(file.type)) {
+    return c.json({
+      error: 'invalid_type',
+      message: 'Tipul fișierului nu este acceptat. Acceptăm doar JPG, PNG sau WebP.',
+    }, 400);
+  }
+
+  // Validate file size
+  if (!isValidFileSize(file.size)) {
+    return c.json({
+      error: 'file_too_large',
+      message: `Fișierul este prea mare. Dimensiunea maximă este ${MAX_FILE_SIZE / 1024 / 1024}MB.`,
+    }, 400);
+  }
+
+  // Check category exists
+  const category = await db.productCategory.findUnique({ where: { id } });
+  if (!category) {
+    return c.json({
+      error: 'not_found',
+      message: 'Categoria nu există',
+    }, 404);
+  }
+
+  try {
+    // Delete old image if exists
+    if (category.imageUrl) {
+      try {
+        await deleteFile(category.imageUrl);
+      } catch (e) {
+        console.error('Failed to delete old category image:', e);
+      }
+    }
+
+    // Upload new image
+    const imageUrl = await uploadFile(file, 'categories');
+
+    // Update category
+    await db.productCategory.update({
+      where: { id },
+      data: { imageUrl },
+    });
+
+    return c.json({
+      imageUrl,
+      message: 'Imaginea a fost încărcată cu succes',
+    }, 200);
+  } catch (error) {
+    console.error('Category image upload error:', error);
+    return c.json({
+      error: 'upload_failed',
+      message: 'Eroare la încărcarea imaginii',
+    }, 500);
+  }
 });
 
 export default app;
